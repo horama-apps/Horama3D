@@ -8,6 +8,50 @@ interface ApiGenerateResponse {
   format?: GeneratedModel['format'];
 }
 
+interface ApiAnalyzeResponse {
+  success?: boolean;
+  valid?: boolean;
+  isValid?: boolean;
+  correct?: boolean;
+  isCorrect?: boolean;
+  status?: string;
+  message?: string;
+  properties?: {
+    is_valid_scenario?: boolean;
+    validation_issues?: string[];
+  };
+}
+
+export interface AnalyzeModelResult {
+  isValid: boolean;
+  message?: string;
+}
+
+export async function analyzeModel(file: File): Promise<AnalyzeModelResult> {
+  const body = new FormData();
+  body.append('file', file, file.name);
+
+  const response = await fetch(getApiUrl('/models/analyze'), {
+    method: 'POST',
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return { isValid: true };
+  }
+
+  const payload = (await response.json()) as ApiAnalyzeResponse;
+  return {
+    isValid: isAnalyzePayloadValid(payload),
+    message: payload.message ?? payload.properties?.validation_issues?.join(', '),
+  };
+}
+
 export async function generateModel(
   productType: ProductType,
   params: ProductParams,
@@ -59,6 +103,35 @@ function inferFormatFromContentType(contentType: string): GeneratedModel['format
   if (contentType.includes('model/gltf-binary')) return 'glb';
   if (contentType.includes('3mf')) return '3mf';
   return 'stl';
+}
+
+function getApiUrl(path: string): string {
+  return apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}${path}` : path;
+}
+
+async function getApiErrorMessage(response: Response): Promise<string> {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json()) as { detail?: string; message?: string };
+    return payload.detail ?? payload.message ?? `STP API returned ${response.status}`;
+  }
+
+  const text = await response.text();
+  return text || `STP API returned ${response.status}`;
+}
+
+function isAnalyzePayloadValid(payload: ApiAnalyzeResponse): boolean {
+  if (typeof payload.properties?.is_valid_scenario === 'boolean') {
+    return payload.properties.is_valid_scenario;
+  }
+  if (typeof payload.success === 'boolean') return payload.success;
+  if (typeof payload.valid === 'boolean') return payload.valid;
+  if (typeof payload.isValid === 'boolean') return payload.isValid;
+  if (typeof payload.correct === 'boolean') return payload.correct;
+  if (typeof payload.isCorrect === 'boolean') return payload.isCorrect;
+
+  const normalizedStatus = payload.status?.toLowerCase();
+  return ['valid', 'correct', 'ok', 'success', 'approved'].includes(normalizedStatus ?? '');
 }
 
 function sleep(ms: number): Promise<void> {

@@ -3,12 +3,13 @@ import type { ParamDefinition, ProductDefinition, ProductParams } from '../types
 interface ParamPanelProps {
   product: ProductDefinition;
   params: ProductParams;
+  disabled?: boolean;
   onChange: (key: string, value: ProductParams[string]) => void;
 }
 
-export function ParamPanel({ product, params, onChange }: ParamPanelProps) {
+export function ParamPanel({ product, params, disabled = false, onChange }: ParamPanelProps) {
   return (
-    <aside className="panel panel-right">
+    <aside className={disabled ? 'panel panel-right panel-disabled' : 'panel panel-right'}>
       <div className="panel-heading">
         <p className="eyebrow">Parameters</p>
         <h2>{product.name}</h2>
@@ -20,6 +21,7 @@ export function ParamPanel({ product, params, onChange }: ParamPanelProps) {
             key={param.key}
             param={param}
             value={params[param.key] ?? param.defaultValue}
+            disabled={disabled}
             onChange={(value) => onChange(param.key, value)}
           />
         ))}
@@ -31,10 +33,11 @@ export function ParamPanel({ product, params, onChange }: ParamPanelProps) {
 interface ParamControlProps {
   param: ParamDefinition;
   value: ProductParams[string];
+  disabled: boolean;
   onChange: (value: ProductParams[string]) => void;
 }
 
-function ParamControl({ param, value, onChange }: ParamControlProps) {
+function ParamControl({ param, value, disabled, onChange }: ParamControlProps) {
   if (param.kind === 'boolean') {
     return (
       <label className="toggle-row">
@@ -42,6 +45,7 @@ function ParamControl({ param, value, onChange }: ParamControlProps) {
         <input
           type="checkbox"
           checked={Boolean(value)}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
         />
       </label>
@@ -52,7 +56,11 @@ function ParamControl({ param, value, onChange }: ParamControlProps) {
     return (
       <label className="field">
         <span>{param.label}</span>
-        <select value={String(value)} onChange={(event) => onChange(event.target.value)}>
+        <select
+          value={String(value)}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+        >
           {param.options.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -78,6 +86,7 @@ function ParamControl({ param, value, onChange }: ParamControlProps) {
         max={param.max}
         step={param.step}
         value={Number(value)}
+        disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </label>
