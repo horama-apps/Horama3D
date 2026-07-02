@@ -20,7 +20,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -434,6 +435,38 @@ a {
   background: #fff;
   color: #232629;
   padding: 0 11px;
+}
+
+.field input[type="text"],
+.field textarea {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid rgba(32, 35, 38, 0.14);
+  border-radius: 8px;
+  background: #fff;
+  color: #232629;
+  padding: 9px 11px;
+}
+
+.field textarea {
+  resize: vertical;
+  line-height: 1.35;
+}
+
+.color-control {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.color-control input[type="color"] {
+  width: 46px;
+  height: 40px;
+  padding: 3px;
+  border: 1px solid rgba(32, 35, 38, 0.14);
+  border-radius: 8px;
+  background: #fff;
 }
 
 .toggle-row {

@@ -71,6 +71,53 @@ function ParamControl({ param, value, disabled, onChange }: ParamControlProps) {
     );
   }
 
+  if (param.kind === 'text') {
+    return (
+      <label className="field">
+        <span>{param.label}</span>
+        {param.multiline ? (
+          <textarea
+            value={String(value)}
+            disabled={disabled}
+            placeholder={param.placeholder}
+            rows={3}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        ) : (
+          <input
+            type="text"
+            value={String(value)}
+            disabled={disabled}
+            placeholder={param.placeholder}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        )}
+      </label>
+    );
+  }
+
+  if (param.kind === 'color') {
+    return (
+      <label className="field color-field">
+        <span>{param.label}</span>
+        <span className="color-control">
+          <input
+            type="color"
+            value={String(value)}
+            disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+          />
+          <input
+            type="text"
+            value={String(value)}
+            disabled={disabled}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </span>
+      </label>
+    );
+  }
+
   return (
     <label className="field">
       <span>

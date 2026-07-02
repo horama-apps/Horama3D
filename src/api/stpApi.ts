@@ -66,6 +66,11 @@ export async function generateModel(
   params: ProductParams,
   file?: File,
 ): Promise<GeneratedModel> {
+  if (productType === 'urn') {
+    if (!file) throw new Error('Load a valid STL before applying the urn transform.');
+    return generateUrnTransformModel(file, params);
+  }
+
   if (productType === 'textures') {
     if (!file) throw new Error('Load a valid STL before applying textures.');
     return generateTextureModel(file, params);
@@ -94,6 +99,48 @@ export async function generateModel(
       modelUrl: payload.modelUrl,
       downloadUrl: payload.downloadUrl,
       format: payload.format ?? inferFormat(payload.modelUrl ?? payload.downloadUrl),
+    };
+  }
+
+  const blob = await response.blob();
+  return {
+    source: 'api',
+    blob,
+    downloadUrl: URL.createObjectURL(blob),
+    format: inferFormatFromContentType(contentType),
+  };
+}
+
+async function generateUrnTransformModel(file: File, params: ProductParams): Promise<GeneratedModel> {
+  const body = new FormData();
+  body.append('file', file, file.name);
+  appendDefined(body, 'size', params.size);
+  appendDefined(body, 'lid_text', params.lid_text);
+  appendDefined(body, 'body_color', params.body_color);
+  appendDefined(body, 'output_format', params.output_format);
+  appendDefined(body, 'plate_size_mm', params.plate_size_mm);
+  appendDefined(body, 'base_thickness_mm', params.base_thickness_mm);
+  appendDefined(body, 'inner_scale', params.inner_scale);
+  appendDefined(body, 'planar_cut_base_mm', params.planar_cut_base_mm);
+
+  const response = await fetch(getApiUrl('/transforms/urns'), {
+    method: 'POST',
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json()) as ApiGenerateResponse;
+    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
+    return {
+      source: 'api',
+      modelUrl: payload.modelUrl ?? downloadUrl,
+      downloadUrl,
+      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
     };
   }
 
