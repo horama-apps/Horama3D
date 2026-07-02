@@ -1,4 +1,4 @@
-export type ProductType = 'urn' | 'clicker';
+export type ProductType = 'urn' | 'clicker' | 'textures';
 
 export type ParamKind = 'number' | 'boolean' | 'select';
 

@@ -12,8 +12,10 @@ export function App() {
   const [paramsByType, setParamsByType] = useState<Record<ProductType, ProductParams>>({
     urn: getDefaultParams(getProduct('urn')),
     clicker: getDefaultParams(getProduct('clicker')),
+    textures: getDefaultParams(getProduct('textures')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({ source: 'empty', format: 'stl' });
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [status, setStatus] = useState('Load an STL to inspect it in the viewer');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -43,6 +45,7 @@ export function App() {
 
   const returnToDefaultState = (nextStatus = 'Load an STL to inspect it in the viewer') => {
     setActiveModel({ source: 'empty', format: 'stl' });
+    setUploadedFile(null);
     setIsModelValidated(false);
     setStatus(nextStatus);
     if (uploadInputRef.current) {
@@ -66,7 +69,7 @@ export function App() {
     setIsGenerating(true);
     setStatus('Generating through STP pipeline...');
     try {
-      const generated = await generateModel(productType, params);
+      const generated = await generateModel(productType, params, uploadedFile ?? undefined);
       setActiveModel(generated);
       setIsModelValidated(generated.source !== 'empty');
       setStatus(
@@ -113,6 +116,7 @@ export function App() {
       }
 
       const modelUrl = URL.createObjectURL(file);
+      setUploadedFile(file);
       setActiveModel({
         source: 'upload',
         name: file.name,
@@ -163,7 +167,7 @@ export function App() {
               {isAnalyzing ? <Loader2 className="spin" size={18} /> : <FileUp size={18} />}
               {isAnalyzing ? 'Analyzing STL' : 'Load STL'}
             </button>
-            <p>{model?.source === 'upload' ? model.name : 'Select a local STL to preview.'}</p>
+            <p>{uploadedFile ? uploadedFile.name : 'Select a local STL to preview.'}</p>
           </div>
 
           {products.map((item) => (

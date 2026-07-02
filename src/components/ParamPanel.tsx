@@ -76,7 +76,7 @@ function ParamControl({ param, value, disabled, onChange }: ParamControlProps) {
       <span>
         {param.label}
         <strong>
-          {Number(value).toFixed(param.step < 1 ? 1 : 0)}
+          {formatNumberValue(Number(value), param.step)}
           {param.unit ? ` ${param.unit}` : ''}
         </strong>
       </span>
@@ -91,4 +91,10 @@ function ParamControl({ param, value, disabled, onChange }: ParamControlProps) {
       />
     </label>
   );
+}
+
+function formatNumberValue(value: number, step: number): string {
+  const stepText = String(step);
+  const decimals = stepText.includes('.') ? stepText.split('.')[1].length : 0;
+  return value.toFixed(decimals);
 }

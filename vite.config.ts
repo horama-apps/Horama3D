@@ -11,6 +11,22 @@ export default defineConfig({
         target: stpApiTarget,
         changeOrigin: true,
       },
+      '/analyze': {
+        target: stpApiTarget,
+        changeOrigin: true,
+      },
+      '/transforms': {
+        target: stpApiTarget,
+        changeOrigin: true,
+      },
+      '/transform': {
+        target: stpApiTarget,
+        changeOrigin: true,
+      },
+      '/download': {
+        target: stpApiTarget,
+        changeOrigin: true,
+      },
     },
   },
 });

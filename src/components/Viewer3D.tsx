@@ -185,7 +185,14 @@ function createModelMaterial(
   source: GeneratedModel['source'],
 ): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
-    color: source === 'upload' ? 0x7f8d92 : productType === 'urn' ? 0x2f8f83 : 0xb6682f,
+    color:
+      source === 'upload'
+        ? 0x7f8d92
+        : productType === 'urn'
+          ? 0x2f8f83
+          : productType === 'textures'
+            ? 0x6f6ad8
+            : 0xb6682f,
     roughness: 0.55,
     metalness: 0.04,
   });

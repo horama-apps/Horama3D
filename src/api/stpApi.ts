@@ -5,6 +5,7 @@ const apiBaseUrl = import.meta.env.VITE_STP_API_BASE_URL as string | undefined;
 interface ApiGenerateResponse {
   modelUrl?: string;
   downloadUrl?: string;
+  filename?: string;
   format?: GeneratedModel['format'];
 }
 
@@ -31,10 +32,7 @@ export async function analyzeModel(file: File): Promise<AnalyzeModelResult> {
   const body = new FormData();
   body.append('file', file, file.name);
 
-  const response = await fetch(getApiUrl('/models/analyze'), {
-    method: 'POST',
-    body,
-  });
+  const response = await postAnalyzeModel(body);
 
   if (!response.ok) {
     throw new Error(await getApiErrorMessage(response));
@@ -55,7 +53,13 @@ export async function analyzeModel(file: File): Promise<AnalyzeModelResult> {
 export async function generateModel(
   productType: ProductType,
   params: ProductParams,
+  file?: File,
 ): Promise<GeneratedModel> {
+  if (productType === 'textures') {
+    if (!file) throw new Error('Load a valid STL before applying textures.');
+    return generateTextureModel(file, params);
+  }
+
   if (!apiBaseUrl) {
     await sleep(350);
     return { source: 'empty', format: 'stl' };
@@ -91,6 +95,70 @@ export async function generateModel(
   };
 }
 
+async function generateTextureModel(file: File, params: ProductParams): Promise<GeneratedModel> {
+  const body = new FormData();
+  body.append('file', file, file.name);
+  appendDefined(body, 'texture', params.texture);
+  appendDefined(body, 'texture_depth_mm', params.texture_depth_mm);
+  appendDefined(body, 'texture_spacing_mm', params.texture_spacing_mm);
+  body.append('lid_type', 'none');
+  body.append('output_format', 'stl_combined');
+
+  const response = await postTextureTransform(body);
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json()) as ApiGenerateResponse;
+    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
+    return {
+      source: 'api',
+      modelUrl: payload.modelUrl ?? downloadUrl,
+      downloadUrl,
+      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+    };
+  }
+
+  const blob = await response.blob();
+  return {
+    source: 'api',
+    blob,
+    downloadUrl: URL.createObjectURL(blob),
+    format: inferFormatFromContentType(contentType),
+  };
+}
+
+async function postTextureTransform(body: FormData): Promise<Response> {
+  const response = await fetch(getApiUrl('/transforms/generic'), {
+    method: 'POST',
+    body,
+  });
+
+  if (response.status !== 404 && response.status !== 405) return response;
+
+  return fetch(getApiUrl('/transform'), {
+    method: 'POST',
+    body,
+  });
+}
+
+async function postAnalyzeModel(body: FormData): Promise<Response> {
+  const response = await fetch(getApiUrl('/models/analyze'), {
+    method: 'POST',
+    body,
+  });
+
+  if (response.status !== 404 && response.status !== 405) return response;
+
+  return fetch(getApiUrl('/analyze'), {
+    method: 'POST',
+    body,
+  });
+}
+
 function inferFormat(url?: string): GeneratedModel['format'] {
   if (!url) return 'stl';
   const clean = url.split('?')[0].toLowerCase();
@@ -103,6 +171,17 @@ function inferFormatFromContentType(contentType: string): GeneratedModel['format
   if (contentType.includes('model/gltf-binary')) return 'glb';
   if (contentType.includes('3mf')) return '3mf';
   return 'stl';
+}
+
+function appendDefined(body: FormData, key: string, value: ProductParams[string] | undefined) {
+  if (value === undefined || value === '') return;
+  body.append(key, String(value));
+}
+
+function buildDownloadUrl(filename?: string): string | undefined {
+  if (!filename) return undefined;
+  const cleanFilename = filename.split('/').pop();
+  return cleanFilename ? getApiUrl(`/download/${encodeURIComponent(cleanFilename)}`) : undefined;
 }
 
 function getApiUrl(path: string): string {

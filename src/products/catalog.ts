@@ -111,6 +111,47 @@ export const products: ProductDefinition[] = [
       },
     ],
   },
+  {
+    type: 'textures',
+    name: 'Textures',
+    description: 'Raised printable surface patterns from the generic transform flow.',
+    accent: '#6f6ad8',
+    params: [
+      {
+        kind: 'select',
+        key: 'texture',
+        label: 'Texture',
+        defaultValue: 'woven',
+        options: [
+          { label: 'Woven', value: 'woven' },
+          { label: 'Knit', value: 'knit' },
+          { label: 'Carbon', value: 'carbon' },
+          { label: 'Wood', value: 'wood' },
+          { label: 'None', value: 'none' },
+        ],
+      },
+      {
+        kind: 'number',
+        key: 'texture_depth_mm',
+        label: 'Relief depth',
+        unit: 'mm',
+        min: 0.1,
+        max: 1.2,
+        step: 0.05,
+        defaultValue: 0.45,
+      },
+      {
+        kind: 'number',
+        key: 'texture_spacing_mm',
+        label: 'Pattern spacing',
+        unit: 'mm',
+        min: 1,
+        max: 8,
+        step: 0.25,
+        defaultValue: 3,
+      },
+    ],
+  },
 ];
 
 export function getProduct(type: ProductType): ProductDefinition {
