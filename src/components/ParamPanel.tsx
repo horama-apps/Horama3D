@@ -1,13 +1,25 @@
-import type { ParamDefinition, ProductDefinition, ProductParams } from '../types';
+import type {
+  GeneratedModel,
+  ParamDefinition,
+  ProductDefinition,
+  ProductParams,
+  UrnTransformInfo,
+} from '../types';
 
 interface ParamPanelProps {
   product: ProductDefinition;
   params: ProductParams;
   disabled?: boolean;
+  modelMetadata?: GeneratedModel['metadata'];
   onChange: (key: string, value: ProductParams[string]) => void;
 }
 
-export function ParamPanel({ product, params, disabled = false, onChange }: ParamPanelProps) {
+export function ParamPanel({ product, params, disabled = false, modelMetadata, onChange }: ParamPanelProps) {
+  const urnInfo = product.type === 'urn' ? modelMetadata?.urn : undefined;
+  const urnInfoRows = urnInfo ? getUrnInfoRows(urnInfo) : [];
+  const colorParams = product.params.filter((param) => param.kind === 'color');
+  const mainParams = product.params.filter((param) => param.kind !== 'color');
+
   return (
     <aside className={disabled ? 'panel panel-right panel-disabled' : 'panel panel-right'}>
       <div className="panel-heading">
@@ -16,7 +28,7 @@ export function ParamPanel({ product, params, disabled = false, onChange }: Para
       </div>
 
       <div className="controls">
-        {product.params.map((param) => (
+        {mainParams.map((param) => (
           <ParamControl
             key={param.key}
             param={param}
@@ -26,6 +38,46 @@ export function ParamPanel({ product, params, disabled = false, onChange }: Para
           />
         ))}
       </div>
+
+      {colorParams.length > 0 && (
+        <section className="color-section" aria-label="Model colors">
+          <div className="section-heading">
+            <p className="eyebrow">Colors</p>
+            <h3>Preview materials</h3>
+          </div>
+          <div className="controls color-controls">
+            {colorParams.map((param) => (
+              <ParamControl
+                key={param.key}
+                param={param}
+                value={params[param.key] ?? param.defaultValue}
+                disabled={disabled}
+                onChange={(value) => onChange(param.key, value)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {urnInfoRows.length > 0 && (
+        <section className="transform-info" aria-label="Urn transform information">
+          <div className="section-heading">
+            <p className="eyebrow">Transform info</p>
+            <h3>Generated urn</h3>
+          </div>
+          <dl>
+            {urnInfoRows.map((row) => (
+              <div key={row.label}>
+                <dt>{row.label}</dt>
+                <dd>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+          {modelMetadata?.objects && modelMetadata.objects.length > 0 && (
+            <p className="object-list">Objects: {modelMetadata.objects.join(', ')}</p>
+          )}
+        </section>
+      )}
     </aside>
   );
 }
@@ -144,4 +196,19 @@ function formatNumberValue(value: number, step: number): string {
   const stepText = String(step);
   const decimals = stepText.includes('.') ? stepText.split('.')[1].length : 0;
   return value.toFixed(decimals);
+}
+
+function getUrnInfoRows(info: UrnTransformInfo) {
+  return [
+    { label: 'Size', value: info.size?.toUpperCase() },
+    { label: 'Target capacity', value: formatInfoNumber(info.target_capacity_ml, 'ml') },
+    { label: 'Estimated capacity', value: formatInfoNumber(info.estimated_capacity_ml, 'ml') },
+    { label: 'Applied scale', value: formatInfoNumber(info.applied_scale) },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
+function formatInfoNumber(value: number | undefined, unit?: string): string | undefined {
+  if (value === undefined) return undefined;
+  const formatted = value.toFixed(2);
+  return unit ? `${formatted} ${unit}` : formatted;
 }

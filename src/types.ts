@@ -62,6 +62,29 @@ export interface GeneratedModel {
   name?: string;
   modelUrl?: string;
   downloadUrl?: string;
+  previewFiles?: PreviewFile[];
   blob?: Blob;
   format: 'stl' | '3mf' | 'glb';
+  metadata?: {
+    objects?: string[];
+    urn?: UrnTransformInfo;
+    warnings?: string[];
+  };
+}
+
+export interface PreviewFile {
+  role: 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture' | string;
+  object?: string;
+  filename?: string;
+  url: string;
+  format: 'stl' | '3mf' | 'glb';
+}
+
+export interface UrnTransformInfo {
+  size?: string;
+  target_capacity_ml?: number;
+  initial_capacity_ml?: number;
+  estimated_capacity_ml?: number;
+  requested_scale?: number;
+  applied_scale?: number;
 }

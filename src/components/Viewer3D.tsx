@@ -127,6 +127,29 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
       return;
     }
 
+    if (model.previewFiles && model.previewFiles.length > 0) {
+      const loader = new STLLoader();
+      let loadedCount = 0;
+      const expectedCount = model.previewFiles.length;
+
+      model.previewFiles.forEach((previewFile) => {
+        loader.load(previewFile.url, (geometry) => {
+          geometry.computeVertexNormals();
+          const mesh = new THREE.Mesh(
+            geometry,
+            createModelMaterial(productType, model.source, params, getPreviewRole(previewFile.role)),
+          );
+          mesh.name = previewFile.object ?? previewFile.role;
+          context.modelRoot.add(mesh);
+          loadedCount += 1;
+          if (loadedCount === expectedCount) {
+            context.frameModel();
+          }
+        });
+      });
+      return;
+    }
+
     const modelUrl = model.modelUrl ?? model.downloadUrl;
     if (!modelUrl) {
       return;
@@ -136,6 +159,7 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
       const loader = new GLTFLoader();
       loader.load(modelUrl, (gltf) => {
         clearGroup(context.modelRoot);
+        applyNamedMaterials(gltf.scene, productType, params, model.source);
         context.modelRoot.add(gltf.scene);
         context.frameModel();
       });
@@ -148,12 +172,12 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
       geometry.computeVertexNormals();
       const mesh = new THREE.Mesh(
         geometry,
-        createModelMaterial(productType, model.source),
+        createModelMaterial(productType, model.source, params),
       );
       context.modelRoot.add(mesh);
       context.frameModel();
     });
-  }, [model, productType]);
+  }, [model, params, productType]);
 
   return <div className="viewer" ref={hostRef} />;
 }
@@ -161,19 +185,83 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
 function createModelMaterial(
   productType: ProductType,
   source: GeneratedModel['source'],
+  params: ProductParams,
+  role: 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture' = 'body',
 ): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
-    color:
-      source === 'upload'
-        ? 0x7f8d92
-        : productType === 'urn'
-          ? 0x2f8f83
-          : productType === 'textures'
-            ? 0x6f6ad8
-            : 0xb6682f,
-    roughness: 0.55,
+    color: getMaterialColor(productType, source, params, role),
+    roughness: role === 'text' ? 0.48 : 0.55,
     metalness: 0.04,
   });
+}
+
+function getMaterialColor(
+  productType: ProductType,
+  source: GeneratedModel['source'],
+  params: ProductParams,
+  role: 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture',
+): THREE.ColorRepresentation {
+  if (productType !== 'urn' || source === 'upload') return getBaseModelColor(productType, source);
+  if (role === 'text') return getColorParam(params.text_color, '#232629');
+  if (role === 'lid') return getColorParam(params.lid_color, '#ffffff');
+  if (role === 'body') return getColorParam(params.body_color, '#ffffff');
+  return getBaseModelColor(productType, source);
+}
+
+function getColorParam(value: ProductParams[string] | undefined, fallback: string): THREE.Color {
+  return new THREE.Color(typeof value === 'string' && value.trim() ? value : fallback);
+}
+
+function getBaseModelColor(productType: ProductType, source: GeneratedModel['source']): THREE.ColorRepresentation {
+  return (
+    source === 'upload'
+      ? 0x7f8d92
+      : productType === 'urn'
+        ? 0x2f8f83
+        : productType === 'textures'
+          ? 0x6f6ad8
+          : 0xb6682f
+  );
+}
+
+function applyNamedMaterials(
+  root: THREE.Object3D,
+  productType: ProductType,
+  params: ProductParams,
+  source: GeneratedModel['source'],
+) {
+  root.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    const role = getObjectRole(node);
+    node.material = createModelMaterial(productType, source, params, role);
+  });
+}
+
+function getObjectRole(node: THREE.Object3D): 'body' | 'text' {
+  const name = getObjectNamePath(node).toLowerCase();
+  return /(^|[^a-z0-9])(text|label|letter|letters|engraving|inscription)([^a-z0-9]|$)/.test(name)
+    ? 'text'
+    : 'body';
+}
+
+function getPreviewRole(role: string): 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture' {
+  const normalized = role.toLowerCase();
+  if (normalized === 'lid') return 'lid';
+  if (normalized === 'text') return 'text';
+  if (normalized === 'detail') return 'detail';
+  if (normalized === 'support') return 'support';
+  if (normalized === 'texture') return 'texture';
+  return 'body';
+}
+
+function getObjectNamePath(node: THREE.Object3D): string {
+  const names: string[] = [];
+  let current: THREE.Object3D | null = node;
+  while (current) {
+    if (current.name) names.push(current.name);
+    current = current.parent;
+  }
+  return names.join(' ');
 }
 
 function clearGroup(group: THREE.Group) {

@@ -176,16 +176,9 @@ a {
   line-height: 1.35;
 }
 
-.actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 24px;
-}
-
 .primary-action,
-.secondary-action {
+.secondary-action,
+.tool-action {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -207,7 +200,8 @@ a {
 }
 
 .primary-action:disabled,
-.secondary-action:disabled {
+.secondary-action:disabled,
+.tool-action:disabled {
   cursor: not-allowed;
   opacity: 0.72;
 }
@@ -217,29 +211,161 @@ a {
   border-color: rgba(32, 35, 38, 0.13);
 }
 
-.secondary-action.disabled {
+.secondary-action.disabled,
+.tool-action.disabled {
   pointer-events: none;
   opacity: 0.48;
-}
-
-.status {
-  min-height: 38px;
-  margin: 14px 0 0;
-  color: #666964;
-  font-size: 0.88rem;
-  line-height: 1.45;
 }
 
 .stage {
   position: relative;
   min-width: 0;
+  height: 100vh;
   min-height: 100vh;
+}
+
+.stage-toolbar {
+  position: absolute;
+  top: 24px;
+  right: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 42px;
+  gap: 6px;
+  width: 56px;
+  transform: translateX(1px);
+  padding: 6px;
+  border: 1px solid rgba(32, 35, 38, 0.13);
+  border-right: 0;
+  border-radius: 8px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  background: rgba(250, 248, 242, 0.78);
+  box-shadow: 0 18px 42px rgba(35, 45, 42, 0.16);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+  transition:
+    width 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.stage-toolbar:hover,
+.stage-toolbar:focus-within,
+.stage-toolbar-expanded {
+  width: 168px;
+  background: rgba(250, 248, 242, 0.9);
+  box-shadow: 0 20px 46px rgba(35, 45, 42, 0.18);
+}
+
+.stage-toolbar .primary-action {
+  grid-column: auto;
+  width: 42px;
+  min-height: 36px;
+  padding: 0;
+  box-shadow: none;
+}
+
+.tool-action {
+  width: 42px;
+  min-height: 36px;
+  border-color: rgba(32, 35, 38, 0.08);
+  color: #424743;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.stage-toolbar .primary-action,
+.stage-toolbar .tool-action {
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: 0 11px;
+  transition:
+    width 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.stage-toolbar svg {
+  flex: 0 0 auto;
+}
+
+.stage-toolbar:hover .primary-action,
+.stage-toolbar:focus-within .primary-action,
+.stage-toolbar-expanded .primary-action,
+.stage-toolbar:hover .tool-action,
+.stage-toolbar:focus-within .tool-action,
+.stage-toolbar-expanded .tool-action {
+  width: 154px;
+}
+
+.stage-toolbar span {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-4px);
+  overflow: hidden;
+  white-space: nowrap;
+  transition:
+    max-width 0.18s ease,
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.stage-toolbar:hover span,
+.stage-toolbar:focus-within span,
+.stage-toolbar-expanded span {
+  max-width: 96px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.tool-action:hover {
+  border-color: rgba(32, 35, 38, 0.12);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.tool-action:disabled:hover {
+  border-color: rgba(32, 35, 38, 0.08);
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.stage-toolbar .primary-action,
+.stage-toolbar .tool-action {
+  pointer-events: auto;
 }
 
 .stage-disabled .viewer {
   filter: grayscale(0.45);
   opacity: 0.42;
   pointer-events: none;
+}
+
+.stage-statusbar {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  left: 18px;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.stage-statusbar span {
+  min-width: 0;
+  max-width: min(620px, 100%);
+  padding: 8px 12px;
+  border: 1px solid rgba(32, 35, 38, 0.1);
+  border-radius: 8px;
+  color: #62655f;
+  background: rgba(250, 248, 242, 0.72);
+  box-shadow: 0 12px 28px rgba(35, 45, 42, 0.1);
+  backdrop-filter: blur(12px);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stage-loader {
@@ -392,6 +518,65 @@ a {
   gap: 18px;
 }
 
+.color-section,
+.transform-info {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(32, 35, 38, 0.12);
+}
+
+.section-heading h3 {
+  margin: 2px 0 0;
+  color: #1f2225;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.color-controls {
+  gap: 14px;
+}
+
+.transform-info dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.transform-info dl div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 30px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(32, 35, 38, 0.08);
+}
+
+.transform-info dt {
+  color: #666964;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.transform-info dd {
+  margin: 0;
+  color: #24272a;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.object-list {
+  margin: 0;
+  color: #666964;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .panel-disabled .controls {
   opacity: 0.5;
 }
@@ -530,7 +715,56 @@ a {
 
   .stage {
     order: 2;
+    height: auto;
     min-height: 58vh;
+  }
+
+  .stage-toolbar {
+    top: 16px;
+    right: 18px;
+    grid-template-columns: minmax(0, 1fr) 38px 38px;
+    width: calc(100% - 36px);
+    transform: none;
+    border-right: 1px solid rgba(32, 35, 38, 0.13);
+    border-radius: 8px;
+  }
+
+  .stage-toolbar:hover,
+  .stage-toolbar:focus-within,
+  .stage-toolbar-expanded {
+    width: calc(100% - 36px);
+  }
+
+  .stage-toolbar .primary-action {
+    width: 100%;
+  }
+
+  .stage-toolbar .tool-action {
+    width: 38px;
+  }
+
+  .stage-toolbar:hover .primary-action,
+  .stage-toolbar:focus-within .primary-action,
+  .stage-toolbar-expanded .primary-action {
+    width: 100%;
+  }
+
+  .stage-toolbar:hover .tool-action,
+  .stage-toolbar:focus-within .tool-action,
+  .stage-toolbar-expanded .tool-action {
+    width: 38px;
+  }
+
+  .stage-toolbar .primary-action span {
+    max-width: 96px;
+    opacity: 1;
+    transform: none;
+  }
+
+  .stage-statusbar {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
   }
 
   .panel-right {

@@ -7,6 +7,18 @@ interface ApiGenerateResponse {
   downloadUrl?: string;
   filename?: string;
   format?: GeneratedModel['format'];
+  preview_files?: unknown;
+  objects?: unknown;
+  urn?: {
+    size?: unknown;
+    target_capacity_ml?: unknown;
+    initial_capacity_ml?: unknown;
+    estimated_capacity_ml?: unknown;
+    requested_scale?: unknown;
+    applied_scale?: unknown;
+    warnings?: unknown;
+  };
+  warnings?: unknown;
 }
 
 interface ApiAnalyzeResponse {
@@ -94,11 +106,18 @@ export async function generateModel(
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
     const payload = (await response.json()) as ApiGenerateResponse;
+    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
     return {
       source: 'api',
-      modelUrl: payload.modelUrl,
-      downloadUrl: payload.downloadUrl,
-      format: payload.format ?? inferFormat(payload.modelUrl ?? payload.downloadUrl),
+      name: getDownloadName(payload.filename),
+      modelUrl: payload.modelUrl ?? downloadUrl,
+      downloadUrl,
+      previewFiles: normalizePreviewFiles(payload.preview_files),
+      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      metadata: {
+        objects: normalizeStringList(payload.objects),
+        warnings: normalizeMessageList(payload.warnings),
+      },
     };
   }
 
@@ -116,9 +135,8 @@ async function generateUrnTransformModel(file: File, params: ProductParams): Pro
   body.append('file', file, file.name);
   appendDefined(body, 'size', params.size);
   appendDefined(body, 'lid_text', params.lid_text);
-  appendDefined(body, 'body_color', params.body_color);
-  appendDefined(body, 'output_format', params.output_format);
-  appendDefined(body, 'plate_size_mm', params.plate_size_mm);
+  appendDefined(body, 'output_format', 'stl');
+
   appendDefined(body, 'base_thickness_mm', params.base_thickness_mm);
   appendDefined(body, 'inner_scale', params.inner_scale);
   appendDefined(body, 'planar_cut_base_mm', params.planar_cut_base_mm);
@@ -136,11 +154,27 @@ async function generateUrnTransformModel(file: File, params: ProductParams): Pro
   if (contentType.includes('application/json')) {
     const payload = (await response.json()) as ApiGenerateResponse;
     const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
+    const previewFiles = normalizePreviewFiles(payload.preview_files);
+    const warnings = normalizeMessageList([payload.warnings, payload.urn?.warnings]);
     return {
       source: 'api',
+      name: getDownloadName(payload.filename),
       modelUrl: payload.modelUrl ?? downloadUrl,
       downloadUrl,
+      previewFiles,
       format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      metadata: {
+        objects: normalizeStringList(payload.objects),
+        urn: {
+          size: typeof payload.urn?.size === 'string' ? payload.urn.size : undefined,
+          target_capacity_ml: normalizeNumber(payload.urn?.target_capacity_ml),
+          initial_capacity_ml: normalizeNumber(payload.urn?.initial_capacity_ml),
+          estimated_capacity_ml: normalizeNumber(payload.urn?.estimated_capacity_ml),
+          requested_scale: normalizeNumber(payload.urn?.requested_scale),
+          applied_scale: normalizeNumber(payload.urn?.applied_scale),
+        },
+        warnings,
+      },
     };
   }
 
@@ -160,7 +194,7 @@ async function generateTextureModel(file: File, params: ProductParams): Promise<
   appendDefined(body, 'texture_depth_mm', params.texture_depth_mm);
   appendDefined(body, 'texture_spacing_mm', params.texture_spacing_mm);
   body.append('lid_type', 'none');
-  body.append('output_format', 'stl_combined');
+  body.append('output_format', 'stl');
 
   const response = await postTextureTransform(body);
 
@@ -174,9 +208,15 @@ async function generateTextureModel(file: File, params: ProductParams): Promise<
     const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
     return {
       source: 'api',
+      name: getDownloadName(payload.filename),
       modelUrl: payload.modelUrl ?? downloadUrl,
       downloadUrl,
+      previewFiles: normalizePreviewFiles(payload.preview_files),
       format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      metadata: {
+        objects: normalizeStringList(payload.objects),
+        warnings: normalizeMessageList(payload.warnings),
+      },
     };
   }
 
@@ -242,6 +282,10 @@ function buildDownloadUrl(filename?: string): string | undefined {
   return cleanFilename ? getApiUrl(`/download/${encodeURIComponent(cleanFilename)}`) : undefined;
 }
 
+function getDownloadName(filename?: string): string | undefined {
+  return filename?.split('/').pop();
+}
+
 function getApiUrl(path: string): string {
   return apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}${path}` : path;
 }
@@ -280,6 +324,44 @@ function normalizeMessageList(value: unknown): string[] {
   }
 
   return [String(value)];
+}
+
+function normalizeStringList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+function normalizeNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  return undefined;
+}
+
+function normalizePreviewFiles(value: unknown): GeneratedModel['previewFiles'] {
+  if (!Array.isArray(value)) return undefined;
+
+  const previewFiles = value.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const record = item as { role?: unknown; object?: unknown; filename?: unknown; url?: unknown };
+    const url = typeof record.url === 'string' ? record.url : buildDownloadUrl(normalizeFilename(record.filename));
+    if (!url) return [];
+
+    return [
+      {
+        role: typeof record.role === 'string' && record.role.trim() ? record.role : 'body',
+        object: typeof record.object === 'string' && record.object.trim() ? record.object : undefined,
+        filename: normalizeFilename(record.filename),
+        url,
+        format: inferFormat(url),
+      },
+    ];
+  });
+
+  return previewFiles.length > 0 ? previewFiles : undefined;
+}
+
+function normalizeFilename(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
 function sleep(ms: number): Promise<void> {

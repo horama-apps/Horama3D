@@ -31,6 +31,7 @@ export function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isModelValidated, setIsModelValidated] = useState(false);
+  const [hasUsedViewerActions, setHasUsedViewerActions] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlRef = useRef<string | null>(null);
@@ -106,12 +107,24 @@ export function App() {
 
   const runGenerate = async () => {
     if (isLocked) return;
+    setHasUsedViewerActions(true);
     setIsGenerating(true);
     setStatus('Generating through STP pipeline...');
     try {
       const generated = await generateModel(productType, params, uploadedFile ?? undefined);
       setActiveModel(generated);
       setIsModelValidated(generated.source !== 'empty');
+      if (generated.metadata?.warnings && generated.metadata.warnings.length > 0) {
+        showToast(
+          {
+            tone: 'warning',
+            placement: 'corner',
+            title: 'Transform warnings',
+            messages: generated.metadata.warnings,
+          },
+          6200,
+        );
+      }
       setStatus(
         generated.source === 'empty'
           ? 'Add VITE_STP_API_BASE_URL to call STP, or load an STL manually.'
@@ -125,6 +138,7 @@ export function App() {
   };
 
   const resetParams = () => {
+    setHasUsedViewerActions(true);
     setParamsByType((current) => ({
       ...current,
       [productType]: getDefaultParams(product),
@@ -212,6 +226,7 @@ export function App() {
   };
 
   const downloadHref = model?.downloadUrl ?? model?.modelUrl;
+  const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
 
   return (
     <main className="app-shell" style={{ '--accent': product.accent } as React.CSSProperties}>
@@ -262,31 +277,40 @@ export function App() {
           ))}
         </div>
 
-        <div className="actions">
-          <button className="primary-action" disabled={isLocked || isGenerating} onClick={runGenerate}>
-            {isGenerating ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-            Generate
-          </button>
-          <button className="secondary-action" disabled={isLocked} onClick={resetParams}>
-            <RotateCcw size={17} />
-            Reset
-          </button>
-          <a
-            className={downloadHref ? 'secondary-action' : 'secondary-action disabled'}
-            href={downloadHref}
-            download={model?.name ?? `${productType}-stp-model.${model?.format ?? 'stl'}`}
-            aria-disabled={!downloadHref}
-          >
-            <Download size={17} />
-            Download
-          </a>
-        </div>
-
-        <p className="status">{status}</p>
       </aside>
 
       <section className={isLocked ? 'stage stage-disabled' : 'stage'}>
+        <div
+          className={shouldExpandViewerActions ? 'stage-toolbar stage-toolbar-expanded' : 'stage-toolbar'}
+          aria-label="Viewer actions"
+        >
+          <button className="primary-action" disabled={isLocked || isGenerating} onClick={runGenerate}>
+            {isGenerating ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
+            <span>Generate</span>
+          </button>
+          <button className="tool-action" disabled={isLocked} onClick={resetParams} aria-label="Reset" title="Reset">
+            <RotateCcw size={17} />
+            <span>Reset</span>
+          </button>
+          <a
+            className={downloadHref ? 'tool-action' : 'tool-action disabled'}
+            href={downloadHref}
+            download={model?.name ?? `${productType}-stp-model.${model?.format ?? 'stl'}`}
+            aria-disabled={!downloadHref}
+            aria-label="Download"
+            title="Download"
+            onClick={() => {
+              if (downloadHref) setHasUsedViewerActions(true);
+            }}
+          >
+            <Download size={17} />
+            <span>Download</span>
+          </a>
+        </div>
         <Viewer3D productType={productType} params={params} model={model} />
+        <div className="stage-statusbar" aria-live="polite">
+          <span>{status}</span>
+        </div>
         {isGenerating && (
           <div className="stage-loader" role="status" aria-live="polite">
             <Loader2 className="spin" size={30} />
@@ -296,7 +320,13 @@ export function App() {
         {isLocked && <div className="stage-lock">Load a valid STL to unlock the 3D preview.</div>}
       </section>
 
-      <ParamPanel product={product} params={params} disabled={isLocked} onChange={updateParam} />
+      <ParamPanel
+        product={product}
+        params={params}
+        disabled={isLocked}
+        modelMetadata={model?.metadata}
+        onChange={updateParam}
+      />
 
       <div className="toast-layer toast-layer-center" aria-live="polite" aria-atomic="true">
         {toasts
