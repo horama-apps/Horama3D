@@ -124,15 +124,11 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
     context.modelRoot.position.set(0, 0, 0);
 
     if (!model || model.source === 'empty') {
-      context.modelRoot.add(createEmptyStateModel());
-      context.frameModel();
       return;
     }
 
     const modelUrl = model.modelUrl ?? model.downloadUrl;
     if (!modelUrl) {
-      context.modelRoot.add(createEmptyStateModel());
-      context.frameModel();
       return;
     }
 
@@ -160,24 +156,6 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
   }, [model, productType]);
 
   return <div className="viewer" ref={hostRef} />;
-}
-
-function createEmptyStateModel(): THREE.Group {
-  const group = new THREE.Group();
-  const plate = new THREE.Mesh(
-    new THREE.BoxGeometry(90, 90, 2),
-    new THREE.MeshStandardMaterial({ color: 0xe2ddd1, roughness: 0.72 }),
-  );
-  plate.position.z = 1;
-  group.add(plate);
-
-  const marker = new THREE.Mesh(
-    new THREE.TorusGeometry(20, 1.8, 12, 64),
-    new THREE.MeshStandardMaterial({ color: 0x2f8f83, roughness: 0.52 }),
-  );
-  marker.position.z = 6;
-  group.add(marker);
-  return group;
 }
 
 function createModelMaterial(

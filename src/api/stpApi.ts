@@ -17,15 +17,22 @@ interface ApiAnalyzeResponse {
   isCorrect?: boolean;
   status?: string;
   message?: string;
+  warning?: unknown;
+  warnings?: unknown;
   properties?: {
     is_valid_scenario?: boolean;
-    validation_issues?: string[];
+    validation_issues?: unknown;
+    validation_warnings?: unknown;
+    warnings?: unknown;
   };
 }
 
 export interface AnalyzeModelResult {
   isValid: boolean;
+  isValidScenario?: boolean;
+  issues: string[];
   message?: string;
+  warnings: string[];
 }
 
 export async function analyzeModel(file: File): Promise<AnalyzeModelResult> {
@@ -40,13 +47,17 @@ export async function analyzeModel(file: File): Promise<AnalyzeModelResult> {
 
   const contentType = response.headers.get('content-type') ?? '';
   if (!contentType.includes('application/json')) {
-    return { isValid: true };
+    return { isValid: true, issues: [], warnings: [] };
   }
 
   const payload = (await response.json()) as ApiAnalyzeResponse;
+  const issues = normalizeMessageList(payload.properties?.validation_issues);
   return {
     isValid: isAnalyzePayloadValid(payload),
-    message: payload.message ?? payload.properties?.validation_issues?.join(', '),
+    isValidScenario: payload.properties?.is_valid_scenario,
+    issues,
+    message: payload.message ?? (issues.length > 0 ? issues.join(', ') : undefined),
+    warnings: collectAnalyzeWarnings(payload),
   };
 }
 
@@ -200,17 +211,28 @@ async function getApiErrorMessage(response: Response): Promise<string> {
 }
 
 function isAnalyzePayloadValid(payload: ApiAnalyzeResponse): boolean {
-  if (typeof payload.properties?.is_valid_scenario === 'boolean') {
-    return payload.properties.is_valid_scenario;
-  }
-  if (typeof payload.success === 'boolean') return payload.success;
-  if (typeof payload.valid === 'boolean') return payload.valid;
-  if (typeof payload.isValid === 'boolean') return payload.isValid;
-  if (typeof payload.correct === 'boolean') return payload.correct;
-  if (typeof payload.isCorrect === 'boolean') return payload.isCorrect;
+  return payload.success === true && payload.properties?.is_valid_scenario === true;
+}
 
-  const normalizedStatus = payload.status?.toLowerCase();
-  return ['valid', 'correct', 'ok', 'success', 'approved'].includes(normalizedStatus ?? '');
+function collectAnalyzeWarnings(payload: ApiAnalyzeResponse): string[] {
+  return [
+    ...normalizeMessageList(payload.warnings),
+    ...normalizeMessageList(payload.warning),
+    ...normalizeMessageList(payload.properties?.validation_warnings),
+    ...normalizeMessageList(payload.properties?.warnings),
+  ];
+}
+
+function normalizeMessageList(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap(normalizeMessageList);
+  if (typeof value === 'string') return value.trim() ? [value] : [];
+  if (typeof value === 'object') {
+    const record = value as { message?: unknown; detail?: unknown; warning?: unknown };
+    return normalizeMessageList(record.message ?? record.detail ?? record.warning);
+  }
+
+  return [String(value)];
 }
 
 function sleep(ms: number): Promise<void> {

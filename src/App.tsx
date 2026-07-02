@@ -6,6 +6,17 @@ import { Viewer3D } from './components/Viewer3D';
 import { getDefaultParams, getProduct, products } from './products/catalog';
 import type { GeneratedModel, ProductParams, ProductType } from './types';
 
+type ToastTone = 'success' | 'warning' | 'error' | 'issue';
+type ToastPlacement = 'center' | 'corner' | 'top';
+
+interface Toast {
+  id: number;
+  tone: ToastTone;
+  placement: ToastPlacement;
+  title: string;
+  messages?: string[];
+}
+
 export function App() {
   const [productType, setProductType] = useState<ProductType>('urn');
   const product = useMemo(() => getProduct(productType), [productType]);
@@ -20,8 +31,11 @@ export function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isModelValidated, setIsModelValidated] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlRef = useRef<string | null>(null);
+  const toastIdRef = useRef(0);
+  const toastTimeoutRefs = useRef<number[]>([]);
 
   const params = paramsByType[productType];
   const isLocked = !isModelValidated;
@@ -29,8 +43,19 @@ export function App() {
   useEffect(() => {
     return () => {
       if (uploadedUrlRef.current) URL.revokeObjectURL(uploadedUrlRef.current);
+      toastTimeoutRefs.current.forEach(window.clearTimeout);
     };
   }, []);
+
+  const showToast = (toast: Omit<Toast, 'id'>, duration = 3600) => {
+    const id = toastIdRef.current + 1;
+    toastIdRef.current = id;
+    setToasts((current) => [...current, { ...toast, id }]);
+    const timeoutId = window.setTimeout(() => {
+      setToasts((current) => current.filter((item) => item.id !== id));
+    }, duration);
+    toastTimeoutRefs.current.push(timeoutId);
+  };
 
   const setActiveModel = (nextModel: GeneratedModel | null) => {
     if (uploadedUrlRef.current && nextModel?.modelUrl !== uploadedUrlRef.current) {
@@ -41,6 +66,21 @@ export function App() {
       uploadedUrlRef.current = nextModel.modelUrl;
     }
     setModel(nextModel);
+  };
+
+  const restoreUploadedModel = (nextStatus = 'STL loaded') => {
+    if (!uploadedFile) return;
+
+    const modelUrl = URL.createObjectURL(uploadedFile);
+    setActiveModel({
+      source: 'upload',
+      name: uploadedFile.name,
+      modelUrl,
+      downloadUrl: modelUrl,
+      format: 'stl',
+    });
+    setIsModelValidated(true);
+    setStatus(nextStatus);
   };
 
   const returnToDefaultState = (nextStatus = 'Load an STL to inspect it in the viewer') => {
@@ -109,8 +149,36 @@ export function App() {
     try {
       const analysis = await analyzeModel(file);
 
+      if (analysis.warnings.length > 0) {
+        showToast(
+          {
+            tone: 'warning',
+            placement: 'corner',
+            title: 'Validation warnings',
+            messages: analysis.warnings,
+          },
+          6200,
+        );
+      }
+
       if (!analysis.isValid) {
-        window.alert(analysis.message ?? 'The STL model is not valid.');
+        if (analysis.isValidScenario === false && analysis.issues.length > 0) {
+          showToast(
+            {
+              tone: 'issue',
+              placement: 'top',
+              title: 'Validation issues',
+              messages: analysis.issues,
+            },
+            6200,
+          );
+        } else {
+          showToast({
+            tone: 'error',
+            placement: 'center',
+            title: analysis.message ?? 'The STL model is not valid.',
+          });
+        }
         returnToDefaultState('Model rejected. Load a valid STL to continue.');
         return;
       }
@@ -126,9 +194,17 @@ export function App() {
       });
       setIsModelValidated(true);
       setStatus(`Loaded ${file.name}`);
-      window.alert('The STL file can be loaded correctly.');
+      showToast({
+        tone: 'success',
+        placement: 'center',
+        title: 'The STL file can be loaded correctly.',
+      });
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : 'Could not validate the STL model.');
+      showToast({
+        tone: 'error',
+        placement: 'center',
+        title: error instanceof Error ? error.message : 'Could not validate the STL model.',
+      });
       returnToDefaultState('Could not validate the model. Try again.');
     } finally {
       setIsAnalyzing(false);
@@ -177,7 +253,7 @@ export function App() {
               disabled={isLocked}
               onClick={() => {
                 setProductType(item.type);
-                setStatus(model?.source === 'upload' ? 'STL loaded' : 'Load an STL to inspect it in the viewer');
+                restoreUploadedModel('STL loaded');
               }}
             >
               <span>{item.name}</span>
@@ -211,10 +287,58 @@ export function App() {
 
       <section className={isLocked ? 'stage stage-disabled' : 'stage'}>
         <Viewer3D productType={productType} params={params} model={model} />
+        {isGenerating && (
+          <div className="stage-loader" role="status" aria-live="polite">
+            <Loader2 className="spin" size={30} />
+            <span>Generating preview</span>
+          </div>
+        )}
         {isLocked && <div className="stage-lock">Load a valid STL to unlock the 3D preview.</div>}
       </section>
 
       <ParamPanel product={product} params={params} disabled={isLocked} onChange={updateParam} />
+
+      <div className="toast-layer toast-layer-center" aria-live="polite" aria-atomic="true">
+        {toasts
+          .filter((toast) => toast.placement === 'center')
+          .map((toast) => (
+            <div className={`toast toast-${toast.tone}`} key={toast.id}>
+              <strong>{toast.title}</strong>
+            </div>
+          ))}
+      </div>
+      <div className="toast-layer toast-layer-top" aria-live="assertive" aria-atomic="true">
+        {toasts
+          .filter((toast) => toast.placement === 'top')
+          .map((toast) => (
+            <div className={`toast toast-${toast.tone}`} key={toast.id}>
+              <strong>{toast.title}</strong>
+              {toast.messages && (
+                <ul>
+                  {toast.messages.map((message, index) => (
+                    <li key={`${toast.id}-${index}`}>{message}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+      </div>
+      <div className="toast-layer toast-layer-corner" aria-live="polite" aria-atomic="true">
+        {toasts
+          .filter((toast) => toast.placement === 'corner')
+          .map((toast) => (
+            <div className={`toast toast-${toast.tone}`} key={toast.id}>
+              <strong>{toast.title}</strong>
+              {toast.messages && (
+                <ul>
+                  {toast.messages.map((message, index) => (
+                    <li key={`${toast.id}-${index}`}>{message}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+      </div>
     </main>
   );
 }
