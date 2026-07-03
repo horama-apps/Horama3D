@@ -8,6 +8,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      headers: {
+        'Content-Security-Policy':
+          "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* https://*.myshopify.com https://admin.shopify.com;",
+      },
       proxy: {
         '/models': {
           target: stpApiTarget,
