@@ -57,6 +57,12 @@ export interface ProductDefinition {
   params: ParamDefinition[];
 }
 
+export interface ModelBounds {
+  width: number;
+  depth: number;
+  height: number;
+}
+
 export interface GeneratedModel {
   source: 'empty' | 'api' | 'upload';
   name?: string;
@@ -68,6 +74,7 @@ export interface GeneratedModel {
   metadata?: {
     objects?: string[];
     urn?: UrnTransformInfo;
+    clicker?: ClickerTransformInfo;
     warnings?: string[];
   };
 }
@@ -87,4 +94,8 @@ export interface UrnTransformInfo {
   estimated_capacity_ml?: number;
   requested_scale?: number;
   applied_scale?: number;
+}
+
+export interface ClickerTransformInfo {
+  cut_height_mm?: number;
 }

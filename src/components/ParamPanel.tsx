@@ -3,6 +3,8 @@ import type {
   ParamDefinition,
   ProductDefinition,
   ProductParams,
+  NumberParamDefinition,
+  ClickerTransformInfo,
   UrnTransformInfo,
 } from '../types';
 
@@ -11,12 +13,27 @@ interface ParamPanelProps {
   params: ProductParams;
   disabled?: boolean;
   modelMetadata?: GeneratedModel['metadata'];
+  paramOverrides?: Record<string, Partial<Pick<NumberParamDefinition, 'min' | 'max' | 'step'>>>;
+  showMaterialControls?: boolean;
   onChange: (key: string, value: ProductParams[string]) => void;
 }
 
-export function ParamPanel({ product, params, disabled = false, modelMetadata, onChange }: ParamPanelProps) {
+export function ParamPanel({
+  product,
+  params,
+  disabled = false,
+  modelMetadata,
+  paramOverrides = {},
+  showMaterialControls = false,
+  onChange,
+}: ParamPanelProps) {
   const urnInfo = product.type === 'urn' ? modelMetadata?.urn : undefined;
-  const urnInfoRows = urnInfo ? getUrnInfoRows(urnInfo) : [];
+  const clickerInfo = product.type === 'clicker' ? modelMetadata?.clicker : undefined;
+  const transformInfoRows = urnInfo
+    ? getUrnInfoRows(urnInfo)
+    : clickerInfo
+      ? getClickerInfoRows(clickerInfo)
+      : [];
   const colorParams = product.params.filter((param) => param.kind === 'color');
   const mainParams = product.params.filter((param) => param.kind !== 'color');
 
@@ -25,6 +42,11 @@ export function ParamPanel({ product, params, disabled = false, modelMetadata, o
       <div className="panel-heading">
         <p className="eyebrow">Parameters</p>
         <h2>{product.name}</h2>
+        {product.type === 'clicker' && (
+          <p className="parameter-note">
+            After generating, use Reset to return to the original STL and show the Z cut plane again.
+          </p>
+        )}
       </div>
 
       <div className="controls">
@@ -34,12 +56,13 @@ export function ParamPanel({ product, params, disabled = false, modelMetadata, o
             param={param}
             value={params[param.key] ?? param.defaultValue}
             disabled={disabled}
+            override={paramOverrides[param.key]}
             onChange={(value) => onChange(param.key, value)}
           />
         ))}
       </div>
 
-      {colorParams.length > 0 && (
+      {showMaterialControls && colorParams.length > 0 && (
         <section className="color-section" aria-label="Model colors">
           <div className="section-heading">
             <p className="eyebrow">Colors</p>
@@ -52,6 +75,7 @@ export function ParamPanel({ product, params, disabled = false, modelMetadata, o
                 param={param}
                 value={params[param.key] ?? param.defaultValue}
                 disabled={disabled}
+                override={paramOverrides[param.key]}
                 onChange={(value) => onChange(param.key, value)}
               />
             ))}
@@ -59,14 +83,14 @@ export function ParamPanel({ product, params, disabled = false, modelMetadata, o
         </section>
       )}
 
-      {urnInfoRows.length > 0 && (
-        <section className="transform-info" aria-label="Urn transform information">
+      {transformInfoRows.length > 0 && (
+        <section className="transform-info" aria-label={`${product.name} transform information`}>
           <div className="section-heading">
             <p className="eyebrow">Transform info</p>
-            <h3>Generated urn</h3>
+            <h3>Generated {product.type === 'clicker' ? 'clicker' : 'urn'}</h3>
           </div>
           <dl>
-            {urnInfoRows.map((row) => (
+            {transformInfoRows.map((row) => (
               <div key={row.label}>
                 <dt>{row.label}</dt>
                 <dd>{row.value}</dd>
@@ -86,10 +110,11 @@ interface ParamControlProps {
   param: ParamDefinition;
   value: ProductParams[string];
   disabled: boolean;
+  override?: Partial<Pick<NumberParamDefinition, 'min' | 'max' | 'step'>>;
   onChange: (value: ProductParams[string]) => void;
 }
 
-function ParamControl({ param, value, disabled, onChange }: ParamControlProps) {
+function ParamControl({ param, value, disabled, override, onChange }: ParamControlProps) {
   if (param.kind === 'boolean') {
     return (
       <label className="toggle-row">
@@ -170,20 +195,24 @@ function ParamControl({ param, value, disabled, onChange }: ParamControlProps) {
     );
   }
 
+  const min = override?.min ?? param.min;
+  const max = override?.max ?? param.max;
+  const step = override?.step ?? param.step;
+
   return (
     <label className="field">
       <span>
         {param.label}
         <strong>
-          {formatNumberValue(Number(value), param.step)}
+          {formatNumberValue(Number(value), step)}
           {param.unit ? ` ${param.unit}` : ''}
         </strong>
       </span>
       <input
         type="range"
-        min={param.min}
-        max={param.max}
-        step={param.step}
+        min={min}
+        max={max}
+        step={step}
         value={Number(value)}
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
@@ -204,6 +233,12 @@ function getUrnInfoRows(info: UrnTransformInfo) {
     { label: 'Target capacity', value: formatInfoNumber(info.target_capacity_ml, 'ml') },
     { label: 'Estimated capacity', value: formatInfoNumber(info.estimated_capacity_ml, 'ml') },
     { label: 'Applied scale', value: formatInfoNumber(info.applied_scale) },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
+function getClickerInfoRows(info: ClickerTransformInfo) {
+  return [
+    { label: 'Cut height', value: formatInfoNumber(info.cut_height_mm, 'mm') },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 }
 

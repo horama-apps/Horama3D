@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Download, FileUp, Loader2, RotateCcw, Wand2 } from 'lucide-react';
 import { analyzeModel, generateModel } from './api/stpApi';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
 import { getDefaultParams, getProduct, products } from './products/catalog';
-import type { GeneratedModel, ProductParams, ProductType } from './types';
+import type { GeneratedModel, ModelBounds, ProductParams, ProductType } from './types';
 
 type ToastTone = 'success' | 'warning' | 'error' | 'issue';
 type ToastPlacement = 'center' | 'corner' | 'top';
@@ -32,6 +32,8 @@ export function App() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isModelValidated, setIsModelValidated] = useState(false);
   const [hasUsedViewerActions, setHasUsedViewerActions] = useState(false);
+  const [isCutPlaneDismissed, setIsCutPlaneDismissed] = useState(false);
+  const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlRef = useRef<string | null>(null);
@@ -40,6 +42,21 @@ export function App() {
 
   const params = paramsByType[productType];
   const isLocked = !isModelValidated;
+  const clickerCutHeightMin = modelBounds ? roundToTenth(modelBounds.height * 0.2) : 0;
+  const clickerCutHeightMax = modelBounds ? roundToTenth(modelBounds.height * 0.8) : 1;
+  const paramOverrides = useMemo(
+    () =>
+      productType === 'clicker'
+        ? {
+            cut_height_mm: {
+              min: clickerCutHeightMin,
+              max: clickerCutHeightMax,
+              step: 0.1,
+            },
+          }
+        : undefined,
+    [clickerCutHeightMax, clickerCutHeightMin, productType],
+  );
 
   useEffect(() => {
     return () => {
@@ -81,6 +98,7 @@ export function App() {
       format: 'stl',
     });
     setIsModelValidated(true);
+    setIsCutPlaneDismissed(false);
     setStatus(nextStatus);
   };
 
@@ -88,6 +106,7 @@ export function App() {
     setActiveModel({ source: 'empty', format: 'stl' });
     setUploadedFile(null);
     setIsModelValidated(false);
+    setIsCutPlaneDismissed(false);
     setStatus(nextStatus);
     if (uploadInputRef.current) {
       uploadInputRef.current.value = '';
@@ -105,9 +124,32 @@ export function App() {
     setStatus(model?.source === 'upload' ? 'STL loaded. Parameters are ready for the STP API.' : 'Parameters updated');
   };
 
+  const handleModelBoundsChange = useCallback((bounds: ModelBounds | null) => {
+    setModelBounds(bounds);
+  }, []);
+
+  useEffect(() => {
+    if (productType !== 'clicker' || model?.source !== 'upload' || !modelBounds) return;
+
+    const minCutHeight = roundToTenth(modelBounds.height * 0.2);
+    const maxCutHeight = roundToTenth(modelBounds.height * 0.8);
+    setParamsByType((current) => {
+      const currentValue = Number(current.clicker.cut_height_mm);
+      if (Number.isFinite(currentValue) && currentValue >= minCutHeight && currentValue <= maxCutHeight) return current;
+      return {
+        ...current,
+        clicker: {
+          ...current.clicker,
+          cut_height_mm: minCutHeight,
+        },
+      };
+    });
+  }, [model?.source, modelBounds, productType]);
+
   const runGenerate = async () => {
     if (isLocked) return;
     setHasUsedViewerActions(true);
+    setIsCutPlaneDismissed(true);
     setIsGenerating(true);
     setStatus('Generating through STP pipeline...');
     try {
@@ -143,6 +185,12 @@ export function App() {
       ...current,
       [productType]: getDefaultParams(product),
     }));
+
+    if (productType === 'clicker' && uploadedFile) {
+      restoreUploadedModel('STL loaded');
+      return;
+    }
+
     setStatus('Defaults restored');
   };
 
@@ -207,6 +255,7 @@ export function App() {
         format: 'stl',
       });
       setIsModelValidated(true);
+      setIsCutPlaneDismissed(false);
       setStatus(`Loaded ${file.name}`);
       showToast({
         tone: 'success',
@@ -307,7 +356,13 @@ export function App() {
             <span>Download</span>
           </a>
         </div>
-        <Viewer3D productType={productType} params={params} model={model} />
+        <Viewer3D
+          productType={productType}
+          params={params}
+          model={model}
+          showCutPlane={!isGenerating && !isCutPlaneDismissed}
+          onModelBoundsChange={handleModelBoundsChange}
+        />
         <div className="stage-statusbar" aria-live="polite">
           <span>{status}</span>
         </div>
@@ -325,6 +380,8 @@ export function App() {
         params={params}
         disabled={isLocked}
         modelMetadata={model?.metadata}
+        paramOverrides={paramOverrides}
+        showMaterialControls={model?.source === 'api'}
         onChange={updateParam}
       />
 
@@ -371,4 +428,8 @@ export function App() {
       </div>
     </main>
   );
+}
+
+function roundToTenth(value: number): number {
+  return Math.max(0, Math.round(value * 10) / 10);
 }

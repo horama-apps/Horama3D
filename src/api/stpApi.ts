@@ -9,6 +9,7 @@ interface ApiGenerateResponse {
   format?: GeneratedModel['format'];
   preview_files?: unknown;
   objects?: unknown;
+  cut_height_mm?: unknown;
   urn?: {
     size?: unknown;
     target_capacity_ml?: unknown;
@@ -88,6 +89,11 @@ export async function generateModel(
     return generateTextureModel(file, params);
   }
 
+  if (productType === 'clicker') {
+    if (!file) throw new Error('Load a valid STL before generating a clicker.');
+    return generateClickerModel(file, params);
+  }
+
   if (!apiBaseUrl) {
     await sleep(350);
     return { source: 'empty', format: 'stl' };
@@ -116,6 +122,54 @@ export async function generateModel(
       format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
       metadata: {
         objects: normalizeStringList(payload.objects),
+        warnings: normalizeMessageList(payload.warnings),
+      },
+    };
+  }
+
+  const blob = await response.blob();
+  return {
+    source: 'api',
+    blob,
+    downloadUrl: URL.createObjectURL(blob),
+    format: inferFormatFromContentType(contentType),
+  };
+}
+
+async function generateClickerModel(file: File, params: ProductParams): Promise<GeneratedModel> {
+  const body = new FormData();
+  body.append('file', file, file.name);
+  appendDefined(body, 'cut_height_mm', params.cut_height_mm);
+  appendDefined(body, 'base_protrusion_mm', params.base_protrusion_mm);
+  appendDefined(body, 'output_format', 'stl');
+  appendDefined(body, 'bottom_color', params.bottom_color);
+  appendDefined(body, 'top_color', params.top_color);
+
+  const response = await fetch(getApiUrl('/transforms/clickers'), {
+    method: 'POST',
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json()) as ApiGenerateResponse;
+    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
+    return {
+      source: 'api',
+      name: getDownloadName(payload.filename),
+      modelUrl: payload.modelUrl ?? downloadUrl,
+      downloadUrl,
+      previewFiles: normalizePreviewFiles(payload.preview_files),
+      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      metadata: {
+        objects: normalizeStringList(payload.objects),
+        clicker: {
+          cut_height_mm: normalizeNumber(payload.cut_height_mm),
+        },
         warnings: normalizeMessageList(payload.warnings),
       },
     };

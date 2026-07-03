@@ -1,26 +1,42 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import type { GeneratedModel, ProductParams, ProductType } from '../types';
+import type { GeneratedModel, ModelBounds, ProductParams, ProductType } from '../types';
 
 interface Viewer3DProps {
   productType: ProductType;
   params: ProductParams;
   model: GeneratedModel | null;
+  showCutPlane?: boolean;
+  onModelBoundsChange?: (bounds: ModelBounds | null) => void;
 }
 
-export function Viewer3D({ productType, params, model }: Viewer3DProps) {
+export function Viewer3D({
+  productType,
+  params,
+  model,
+  showCutPlane = false,
+  onModelBoundsChange,
+}: Viewer3DProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const [liveBounds, setLiveBounds] = useState<ModelBounds | null>(null);
+  const materialKey =
+    productType === 'urn'
+      ? `${params.body_color}|${params.lid_color}|${params.text_color}`
+      : productType === 'clicker'
+        ? `${params.bottom_color}|${params.top_color}`
+        : productType;
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
     renderer: THREE.WebGLRenderer;
     controls: OrbitControls;
     modelRoot: THREE.Group;
-    frameModel: () => void;
+    cutPlaneRoot: THREE.Group;
+    frameModel: () => ModelBounds | null;
     cleanup: () => void;
   } | null>(null);
 
@@ -61,6 +77,9 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
     const modelRoot = new THREE.Group();
     scene.add(modelRoot);
 
+    const cutPlaneRoot = new THREE.Group();
+    scene.add(cutPlaneRoot);
+
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
@@ -68,7 +87,7 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
 
     const frameModel = () => {
       const box = new THREE.Box3().setFromObject(modelRoot);
-      if (box.isEmpty()) return;
+      if (box.isEmpty()) return null;
       const size = box.getSize(new THREE.Vector3());
       const center = box.getCenter(new THREE.Vector3());
       modelRoot.position.sub(new THREE.Vector3(center.x, center.y, box.min.z));
@@ -76,6 +95,11 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
       camera.position.set(radius, -radius * 1.08, radius * 0.72);
       controls.target.set(0, 0, size.z / 2);
       controls.update();
+      return {
+        width: size.x,
+        depth: size.y,
+        height: size.z,
+      };
     };
 
     const onResize = () => {
@@ -101,11 +125,13 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
       renderer,
       controls,
       modelRoot,
+      cutPlaneRoot,
       frameModel,
       cleanup: () => {
         cancelAnimationFrame(raf);
         window.removeEventListener('resize', onResize);
         clearGroup(modelRoot);
+        clearGroup(cutPlaneRoot);
         controls.dispose();
         pmrem.dispose();
         renderer.dispose();
@@ -121,6 +147,8 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
     if (!context) return;
 
     clearGroup(context.modelRoot);
+    setLiveBounds(null);
+    onModelBoundsChange?.(null);
     context.modelRoot.position.set(0, 0, 0);
 
     if (!model || model.source === 'empty') {
@@ -143,7 +171,9 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
           context.modelRoot.add(mesh);
           loadedCount += 1;
           if (loadedCount === expectedCount) {
-            context.frameModel();
+            const bounds = context.frameModel();
+            setLiveBounds(bounds);
+            onModelBoundsChange?.(bounds);
           }
         });
       });
@@ -161,7 +191,9 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
         clearGroup(context.modelRoot);
         applyNamedMaterials(gltf.scene, productType, params, model.source);
         context.modelRoot.add(gltf.scene);
-        context.frameModel();
+        const bounds = context.frameModel();
+        setLiveBounds(bounds);
+        onModelBoundsChange?.(bounds);
       });
       return;
     }
@@ -175,18 +207,78 @@ export function Viewer3D({ productType, params, model }: Viewer3DProps) {
         createModelMaterial(productType, model.source, params),
       );
       context.modelRoot.add(mesh);
-      context.frameModel();
+      const bounds = context.frameModel();
+      setLiveBounds(bounds);
+      onModelBoundsChange?.(bounds);
     });
-  }, [model, params, productType]);
+  }, [model, onModelBoundsChange, productType]);
+
+  useEffect(() => {
+    const context = sceneRef.current;
+    if (!context) return;
+    applyNamedMaterials(context.modelRoot, productType, params, model?.source ?? 'empty');
+  }, [materialKey, model?.source, productType]);
+
+  useEffect(() => {
+    const context = sceneRef.current;
+    if (!context) return;
+
+    clearGroup(context.cutPlaneRoot);
+    const bounds = liveBounds;
+    const cutHeight = Number(params.cut_height_mm);
+    const shouldShowPlane =
+      showCutPlane &&
+      productType === 'clicker' &&
+      model?.source === 'upload' &&
+      bounds &&
+      Number.isFinite(cutHeight);
+
+    if (!shouldShowPlane) return;
+
+    const planeSize = Math.max(bounds.width, bounds.depth) * 1.18;
+    const plane = createCutPlane(planeSize);
+    plane.position.z = THREE.MathUtils.clamp(cutHeight, 0, bounds.height);
+    context.cutPlaneRoot.add(plane);
+  }, [liveBounds, model?.source, params.cut_height_mm, productType, showCutPlane]);
 
   return <div className="viewer" ref={hostRef} />;
+}
+
+function createCutPlane(size: number): THREE.Group {
+  const group = new THREE.Group();
+
+  const geometry = new THREE.PlaneGeometry(size, size);
+  const fill = new THREE.MeshBasicMaterial({
+    color: 0xff7a1a,
+    opacity: 0.24,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, fill);
+  mesh.renderOrder = 4;
+  group.add(mesh);
+
+  const edgeGeometry = new THREE.EdgesGeometry(geometry);
+  const edges = new THREE.LineSegments(
+    edgeGeometry,
+    new THREE.LineBasicMaterial({
+      color: 0xff7a1a,
+      transparent: true,
+      opacity: 0.9,
+    }),
+  );
+  edges.renderOrder = 5;
+  group.add(edges);
+
+  return group;
 }
 
 function createModelMaterial(
   productType: ProductType,
   source: GeneratedModel['source'],
   params: ProductParams,
-  role: 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture' = 'body',
+  role: PreviewRole = 'body',
 ): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
     color: getMaterialColor(productType, source, params, role),
@@ -199,9 +291,15 @@ function getMaterialColor(
   productType: ProductType,
   source: GeneratedModel['source'],
   params: ProductParams,
-  role: 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture',
+  role: PreviewRole,
 ): THREE.ColorRepresentation {
-  if (productType !== 'urn' || source === 'upload') return getBaseModelColor(productType, source);
+  if (source === 'upload') return getBaseModelColor(productType, source);
+  if (productType === 'clicker') {
+    if (role === 'lid') return getColorParam(params.top_color, '#ffffff');
+    if (role === 'body') return getColorParam(params.bottom_color, '#ffffff');
+    return getBaseModelColor(productType, source);
+  }
+  if (productType !== 'urn') return getBaseModelColor(productType, source);
   if (role === 'text') return getColorParam(params.text_color, '#232629');
   if (role === 'lid') return getColorParam(params.lid_color, '#ffffff');
   if (role === 'body') return getColorParam(params.body_color, '#ffffff');
@@ -237,14 +335,18 @@ function applyNamedMaterials(
   });
 }
 
-function getObjectRole(node: THREE.Object3D): 'body' | 'text' {
+type PreviewRole = 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture';
+
+function getObjectRole(node: THREE.Object3D): PreviewRole {
   const name = getObjectNamePath(node).toLowerCase();
-  return /(^|[^a-z0-9])(text|label|letter|letters|engraving|inscription)([^a-z0-9]|$)/.test(name)
-    ? 'text'
-    : 'body';
+  if (/(^|[^a-z0-9])(text|label|letter|letters|engraving|inscription)([^a-z0-9]|$)/.test(name)) {
+    return 'text';
+  }
+  if (/(^|[^a-z0-9])(lid|top)([^a-z0-9]|$)/.test(name)) return 'lid';
+  return 'body';
 }
 
-function getPreviewRole(role: string): 'body' | 'lid' | 'text' | 'detail' | 'support' | 'texture' {
+function getPreviewRole(role: string): PreviewRole {
   const normalized = role.toLowerCase();
   if (normalized === 'lid') return 'lid';
   if (normalized === 'text') return 'text';
@@ -269,6 +371,10 @@ function clearGroup(group: THREE.Group) {
     group.remove(child);
     child.traverse((node) => {
       if (node instanceof THREE.Mesh) {
+        node.geometry.dispose();
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => material.dispose());
+      } else if (node instanceof THREE.LineSegments) {
         node.geometry.dispose();
         const materials = Array.isArray(node.material) ? node.material : [node.material];
         materials.forEach((material) => material.dispose());
