@@ -3,6 +3,7 @@ export const DEFAULT_COLOR = '#919191';
 export const URN_ACCENT_COLOR = '#2f8f83';
 export const CLICKER_ACCENT_COLOR = '#b6682f';
 export const TEXTURES_ACCENT_COLOR = '#6f6ad8';
+export const KEYCHAINS_ACCENT_COLOR = '#f2c94c';
 
 export const KEYCHAIN_LOOP_RADIUS_MM = 5;
 export const KEYCHAIN_HOLE_RADIUS_MM = KEYCHAIN_LOOP_RADIUS_MM * 0.52;

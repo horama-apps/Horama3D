@@ -50,6 +50,7 @@ export function App() {
     urn: getDefaultParams(getProduct('urn')),
     clicker: getDefaultParams(getProduct('clicker')),
     textures: getDefaultParams(getProduct('textures')),
+    keychains: getDefaultParams(getProduct('keychains')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
     source: 'empty',
@@ -80,7 +81,8 @@ export function App() {
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 
   const params = paramsByType[productType];
-  const isLocked = !isModelValidated;
+  const isWipProduct = productType === 'keychains';
+  const isLocked = isWipProduct || !isModelValidated;
   const clickerCutHeightMin = modelBounds
     ? roundToTenth(modelBounds.height * 0.2)
     : 0;
@@ -431,7 +433,7 @@ export function App() {
     }
   };
 
-  const canDownload = Boolean(model && model.source !== 'empty');
+  const canDownload = !isWipProduct && Boolean(model && model.source !== 'empty');
   const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
   const downloadFormats: DownloadFormat[] = ['stl', '3mf'];
 
@@ -487,13 +489,18 @@ export function App() {
                   : 'product-button'
               }
               key={item.type}
-              disabled={isLocked}
+              disabled={isLocked && item.type !== 'keychains' && !isWipProduct}
               onClick={() => {
                 setProductType(item.type);
                 restoreUploadedModel('STL loaded');
               }}
             >
-              <span>{item.name}</span>
+              <span className='product-button-title'>
+                {item.name}
+                {item.type === 'keychains' ? (
+                  <span className='wip-badge'>WIP</span>
+                ) : null}
+              </span>
               <small>{item.description}</small>
             </button>
           ))}
@@ -581,7 +588,7 @@ export function App() {
         <Viewer3D
           productType={productType}
           params={params}
-          model={model}
+          model={isWipProduct ? { source: 'empty', format: 'stl' } : model}
           showCutPlane={!isGenerating && !isCutPlaneDismissed}
           onModelBoundsChange={handleModelBoundsChange}
         />
@@ -595,8 +602,10 @@ export function App() {
           </div>
         )}
         {isLocked && (
-          <div className='stage-lock'>
-            Load a valid STL to unlock the 3D preview.
+          <div className={isWipProduct ? 'stage-lock stage-lock-wip' : 'stage-lock'}>
+            {isWipProduct
+              ? 'work in progress'
+              : 'Load a valid STL to unlock the 3D preview.'}
           </div>
         )}
       </section>

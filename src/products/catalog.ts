@@ -2,6 +2,7 @@ import type { ProductDefinition, ProductParams, ProductType } from '../types';
 import {
   CLICKER_ACCENT_COLOR,
   DEFAULT_COLOR,
+  KEYCHAINS_ACCENT_COLOR,
   TEXTURES_ACCENT_COLOR,
   URN_ACCENT_COLOR,
 } from '../config/constants';
@@ -198,6 +199,13 @@ export const products: ProductDefinition[] = [
         defaultValue: 3,
       },
     ],
+  },
+  {
+    type: 'keychains',
+    name: 'Keychains',
+    description: 'Standalone keychain tools coming soon.',
+    accent: KEYCHAINS_ACCENT_COLOR,
+    params: [],
   },
 ];
 
