@@ -176,6 +176,51 @@ a {
   line-height: 1.35;
 }
 
+.stp-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: auto;
+  padding-top: 22px;
+  color: #515650;
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.stp-status span {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #b44b48;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #b44b48 15%, transparent);
+}
+
+.stp-status strong {
+  min-width: 0;
+  color: inherit;
+  font-size: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stp-status-checking span {
+  background: #c58b18;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #c58b18 15%, transparent);
+}
+
+.stp-status-healthy span {
+  background: #2f8f83;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2f8f83 15%, transparent);
+}
+
+.stp-status-unhealthy span {
+  background: #b44b48;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #b44b48 15%, transparent);
+}
+
 .primary-action,
 .secondary-action,
 .tool-action {

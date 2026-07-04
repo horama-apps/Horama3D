@@ -8,7 +8,7 @@ import {
   RotateCcw,
   Wand2,
 } from 'lucide-react';
-import { analyzeModel, generateModel } from './api/stpApi';
+import { analyzeModel, checkStpHealth, generateModel } from './api/stpApi';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
 import {
@@ -26,6 +26,7 @@ import type {
 
 type ToastTone = 'success' | 'warning' | 'error' | 'issue';
 type ToastPlacement = 'center' | 'corner' | 'top';
+type StpStatusTone = 'checking' | 'healthy' | 'unhealthy';
 
 interface Toast {
   id: number;
@@ -33,6 +34,11 @@ interface Toast {
   placement: ToastPlacement;
   title: string;
   messages?: string[];
+}
+
+interface StpStatus {
+  tone: StpStatusTone;
+  label: string;
 }
 
 export function App() {
@@ -58,6 +64,10 @@ export function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('stl');
   const [isModelValidated, setIsModelValidated] = useState(false);
+  const [stpStatus, setStpStatus] = useState<StpStatus>({
+    tone: 'checking',
+    label: 'Checking STP',
+  });
   const [hasUsedViewerActions, setHasUsedViewerActions] = useState(false);
   const [isCutPlaneDismissed, setIsCutPlaneDismissed] = useState(false);
   const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
@@ -95,6 +105,27 @@ export function App() {
     return () => {
       if (uploadedUrlRef.current) URL.revokeObjectURL(uploadedUrlRef.current);
       toastTimeoutRefs.current.forEach(window.clearTimeout);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const refreshStpStatus = async () => {
+      const health = await checkStpHealth();
+      if (!isMounted) return;
+      setStpStatus({
+        tone: health.isHealthy ? 'healthy' : 'unhealthy',
+        label: health.message,
+      });
+    };
+
+    void refreshStpStatus();
+    const intervalId = window.setInterval(refreshStpStatus, 20000);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
     };
   }, []);
 
@@ -416,7 +447,7 @@ export function App() {
           </div>
           <div>
             <p>Horama3D</p>
-            <h1>STP Configurator</h1>
+            <h1>STL Configurator</h1>
           </div>
         </div>
 
@@ -466,6 +497,15 @@ export function App() {
               <small>{item.description}</small>
             </button>
           ))}
+        </div>
+
+        <div
+          className={`stp-status stp-status-${stpStatus.tone}`}
+          title={stpStatus.label}
+          aria-label={`STP API Status: ${stpStatus.label}`}
+        >
+          <span aria-hidden='true' />
+          <strong>STP API Status</strong>
         </div>
       </aside>
 

@@ -1,6 +1,8 @@
 import type { GeneratedModel, ProductParams, ProductType } from '../types';
 
 const apiBaseUrl = import.meta.env.VITE_STP_API_BASE_URL as string | undefined;
+const healthCheckPath = import.meta.env.VITE_STP_HEALTH_PATH as string | undefined;
+const healthCheckTimeoutMs = 5000;
 
 interface ApiGenerateResponse {
   modelUrl?: string;
@@ -46,6 +48,40 @@ export interface AnalyzeModelResult {
   issues: string[];
   message?: string;
   warnings: string[];
+}
+
+export interface StpHealthStatus {
+  isHealthy: boolean;
+  message: string;
+}
+
+export async function checkStpHealth(): Promise<StpHealthStatus> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), healthCheckTimeoutMs);
+
+  try {
+    const response = await fetch(getApiUrl(healthCheckPath ?? '/health'), {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      return { isHealthy: false, message: `STP returned ${response.status}` };
+    }
+
+    return { isHealthy: true, message: 'STP healthy' };
+  } catch (error) {
+    return {
+      isHealthy: false,
+      message:
+        error instanceof DOMException && error.name === 'AbortError'
+          ? 'STP timeout'
+          : 'No STP connection',
+    };
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 export async function analyzeModel(file: File): Promise<AnalyzeModelResult> {

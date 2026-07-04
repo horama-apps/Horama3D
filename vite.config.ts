@@ -3,7 +3,11 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const stpApiTarget = env.STP_API_TARGET ?? 'http://127.0.0.1:1111';
+  let stpApiTarget = env.STP_API_TARGET ?? 'http://127.0.0.1:1111';
+  if (env.ENVIRONMENT == 'dev') {
+    stpApiTarget = 'http://127.0.0.1:1111';
+  }
+
 
   return {
     plugins: [react()],
@@ -13,6 +17,10 @@ export default defineConfig(({ mode }) => {
           "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* https://*.myshopify.com https://admin.shopify.com;",
       },
       proxy: {
+        '/health': {
+          target: stpApiTarget,
+          changeOrigin: true,
+        },
         '/models': {
           target: stpApiTarget,
           changeOrigin: true,
