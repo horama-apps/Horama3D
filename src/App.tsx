@@ -41,6 +41,12 @@ interface StpStatus {
   label: string;
 }
 
+const wipProductTypes: ProductType[] = ['keychains', 'signs'];
+
+function isWipProductType(type: ProductType): boolean {
+  return wipProductTypes.includes(type);
+}
+
 export function App() {
   const [productType, setProductType] = useState<ProductType>('urn');
   const product = useMemo(() => getProduct(productType), [productType]);
@@ -51,6 +57,7 @@ export function App() {
     clicker: getDefaultParams(getProduct('clicker')),
     textures: getDefaultParams(getProduct('textures')),
     keychains: getDefaultParams(getProduct('keychains')),
+    signs: getDefaultParams(getProduct('signs')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
     source: 'empty',
@@ -81,7 +88,7 @@ export function App() {
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 
   const params = paramsByType[productType];
-  const isWipProduct = productType === 'keychains';
+  const isWipProduct = isWipProductType(productType);
   const isLocked = isWipProduct || !isModelValidated;
   const clickerCutHeightMin = modelBounds
     ? roundToTenth(modelBounds.height * 0.2)
@@ -489,7 +496,8 @@ export function App() {
                   : 'product-button'
               }
               key={item.type}
-              disabled={isLocked && item.type !== 'keychains' && !isWipProduct}
+              style={{ '--product-accent': item.accent } as React.CSSProperties}
+              disabled={isLocked && !isWipProductType(item.type) && !isWipProduct}
               onClick={() => {
                 setProductType(item.type);
                 restoreUploadedModel('STL loaded');
@@ -497,7 +505,7 @@ export function App() {
             >
               <span className='product-button-title'>
                 {item.name}
-                {item.type === 'keychains' ? (
+                {isWipProductType(item.type) ? (
                   <span className='wip-badge'>WIP</span>
                 ) : null}
               </span>

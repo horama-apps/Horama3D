@@ -183,7 +183,7 @@ a {
   padding: 2px 7px;
   border-radius: 999px;
   color: #111111;
-  background: #f2c94c;
+  background: var(--product-accent, var(--accent));
   font-size: 0.68rem;
   font-weight: 900;
   line-height: 1;
@@ -555,7 +555,7 @@ a {
 .stage-lock-wip {
   border-color: rgba(17, 17, 17, 0.18);
   color: #111111;
-  background: #f2c94c;
+  background: var(--accent);
   text-transform: lowercase;
 }
 

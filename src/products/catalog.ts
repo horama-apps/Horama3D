@@ -3,6 +3,7 @@ import {
   CLICKER_ACCENT_COLOR,
   DEFAULT_COLOR,
   KEYCHAINS_ACCENT_COLOR,
+  SIGNS_ACCENT_COLOR,
   TEXTURES_ACCENT_COLOR,
   URN_ACCENT_COLOR,
 } from '../config/constants';
@@ -205,6 +206,13 @@ export const products: ProductDefinition[] = [
     name: 'Keychains',
     description: 'Standalone keychain tools coming soon.',
     accent: KEYCHAINS_ACCENT_COLOR,
+    params: [],
+  },
+  {
+    type: 'signs',
+    name: 'Signs',
+    description: 'Wall Signs tools coming soon.',
+    accent: SIGNS_ACCENT_COLOR,
     params: [],
   },
 ];
