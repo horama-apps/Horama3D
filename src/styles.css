@@ -266,7 +266,8 @@ a {
   box-shadow: none;
 }
 
-.tool-action {
+.tool-action,
+.download-format-control {
   width: 42px;
   min-height: 36px;
   border-color: rgba(32, 35, 38, 0.08);
@@ -275,7 +276,8 @@ a {
 }
 
 .stage-toolbar .primary-action,
-.stage-toolbar .tool-action {
+.stage-toolbar .tool-action,
+.stage-toolbar .download-format-control {
   justify-content: flex-start;
   overflow: hidden;
   padding: 0 11px;
@@ -294,7 +296,10 @@ a {
 .stage-toolbar-expanded .primary-action,
 .stage-toolbar:hover .tool-action,
 .stage-toolbar:focus-within .tool-action,
-.stage-toolbar-expanded .tool-action {
+.stage-toolbar-expanded .tool-action,
+.stage-toolbar:hover .download-format-control,
+.stage-toolbar:focus-within .download-format-control,
+.stage-toolbar-expanded .download-format-control {
   width: 154px;
 }
 
@@ -318,9 +323,68 @@ a {
   transform: translateX(0);
 }
 
-.tool-action:hover {
+.tool-action:hover,
+.download-format-control:hover,
+.download-format-control:focus-within {
   border-color: rgba(32, 35, 38, 0.12);
   background: rgba(255, 255, 255, 0.58);
+}
+
+.download-format-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(32, 35, 38, 0.08);
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.download-format-control strong {
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-4px);
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 0.82rem;
+  line-height: 1;
+  transition:
+    max-width 0.18s ease,
+    opacity 0.14s ease,
+    transform 0.14s ease;
+}
+
+.stage-toolbar:hover .download-format-control strong,
+.stage-toolbar:focus-within .download-format-control strong,
+.stage-toolbar-expanded .download-format-control strong {
+  max-width: 34px;
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.download-format-control-disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.download-format-control-disabled:hover {
+  border-color: rgba(32, 35, 38, 0.08);
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.download-format-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.download-format-select:disabled {
+  cursor: not-allowed;
 }
 
 .tool-action:disabled:hover {
@@ -329,7 +393,8 @@ a {
 }
 
 .stage-toolbar .primary-action,
-.stage-toolbar .tool-action {
+.stage-toolbar .tool-action,
+.stage-toolbar .download-format-control {
   pointer-events: auto;
 }
 
@@ -729,7 +794,7 @@ a {
   .stage-toolbar {
     top: 16px;
     right: 18px;
-    grid-template-columns: minmax(0, 1fr) 38px 38px;
+    grid-template-columns: minmax(0, 1fr) 38px 78px 38px;
     width: calc(100% - 36px);
     transform: none;
     border-right: 1px solid rgba(32, 35, 38, 0.13);
@@ -750,6 +815,11 @@ a {
     width: 38px;
   }
 
+  .stage-toolbar .download-format-control {
+    width: 78px;
+    padding: 0 8px;
+  }
+
   .stage-toolbar:hover .primary-action,
   .stage-toolbar:focus-within .primary-action,
   .stage-toolbar-expanded .primary-action {
@@ -762,10 +832,22 @@ a {
     width: 38px;
   }
 
-  .stage-toolbar .primary-action span {
+  .stage-toolbar:hover .download-format-control,
+  .stage-toolbar:focus-within .download-format-control,
+  .stage-toolbar-expanded .download-format-control {
+    width: 78px;
+  }
+
+  .stage-toolbar .primary-action span,
+  .stage-toolbar .download-format-control strong {
     max-width: 96px;
     opacity: 1;
     transform: none;
+  }
+
+  .stage-toolbar .download-format-control .format-label {
+    max-width: 0;
+    opacity: 0;
   }
 
   .stage-statusbar {
