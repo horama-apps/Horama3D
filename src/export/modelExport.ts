@@ -1,6 +1,15 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type { GeneratedModel, PreviewFile, ProductParams, ProductType } from '../types';
+import {
+  DEFAULT_COLOR,
+  KEYCHAIN_HOLE_RADIUS_MM,
+  KEYCHAIN_LOOP_OVERLAP_MM,
+  KEYCHAIN_LOOP_RADIUS_MM,
+  KEYCHAIN_NECK_LENGTH_MM,
+  KEYCHAIN_NECK_WIDTH_MM,
+  KEYCHAIN_THICKNESS_MM,
+} from '../config/constants';
 
 export type DownloadFormat = 'stl' | '3mf';
 
@@ -49,6 +58,8 @@ interface ParsedMesh {
   mesh: MeshData;
 }
 
+type KeychainPlacement = 'bottom' | 'top';
+
 export async function exportModel(
   model: GeneratedModel,
   productType: ProductType,
@@ -59,7 +70,7 @@ export async function exportModel(
     return export3mf(model, productType, params);
   }
 
-  return exportStlZip(model, productType);
+  return exportStlZip(model, productType, params);
 }
 
 export function getDefaultExportName(
@@ -74,18 +85,21 @@ export function getDefaultExportName(
 async function exportStlZip(
   model: GeneratedModel,
   productType: ProductType,
+  params: ProductParams,
 ): Promise<{ blob: Blob; filename: string }> {
   const parts = getExportParts(model, productType);
   if (parts.length === 0) {
     throw new Error('No STL files are loaded for download.');
   }
 
-  const files = await Promise.all(
-    parts.map(async (part) => ({
-      name: ensureExtension(part.filename, 'stl'),
-      data: await fetchBytes(part.url),
-    })),
-  );
+  const files = shouldAddKeychainLoop(productType, params)
+    ? await buildClickerStlFilesWithKeychain(parts, productType, params)
+    : await Promise.all(
+        parts.map(async (part) => ({
+          name: ensureExtension(part.filename, 'stl'),
+          data: await fetchBytes(part.url),
+        })),
+      );
 
   return {
     blob: createZip(uniquifyZipNames(files)),
@@ -117,11 +131,15 @@ async function export3mf(
       };
     }),
   );
-  const meshes = resolveMeshRoles(productType, parsedMeshes).map(({ part, role, mesh }) => ({
+  const meshes = addKeychainLoopToClickerMeshes(
+    resolveMeshRoles(productType, parsedMeshes).map(({ part, role, mesh }) => ({
     part: { ...part, role },
     material: getExportMaterial(productType, params, role),
     mesh,
-  }));
+    })),
+    productType,
+    params,
+  );
 
   const title = getBaseName(getDefaultExportName(model, productType, '3mf'));
   const bambuProject = buildBambu3mfProject(meshes, title);
@@ -195,6 +213,41 @@ async function fetchBytes(url: string): Promise<Uint8Array<ArrayBuffer>> {
   return new Uint8Array(buffer);
 }
 
+async function buildClickerStlFilesWithKeychain(
+  parts: ExportPart[],
+  productType: ProductType,
+  params: ProductParams,
+): Promise<Array<{ name: string; data: Uint8Array<ArrayBuffer> }>> {
+  const loader = new STLLoader();
+  const parsedMeshes = await Promise.all(
+    parts.map(async (part) => {
+      const bytes = await fetchBytes(part.url);
+      const geometry = loader.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      const roleResult = getPartRole(productType, part);
+      return {
+        part,
+        role: roleResult.role,
+        roleConfidence: roleResult.confidence,
+        mesh: geometryToMeshData(geometry),
+      };
+    }),
+  );
+  const meshes = addKeychainLoopToClickerMeshes(
+    resolveMeshRoles(productType, parsedMeshes).map(({ part, role, mesh }) => ({
+      part: { ...part, role },
+      material: getExportMaterial(productType, params, role),
+      mesh,
+    })),
+    productType,
+    params,
+  );
+
+  return meshes.map(({ part, mesh }) => ({
+    name: ensureExtension(part.filename, 'stl'),
+    data: serializeMeshDataToBinaryStl(mesh),
+  }));
+}
+
 function geometryToMeshData(geometry: THREE.BufferGeometry): MeshData {
   const position = geometry.getAttribute('position');
   const vertices: THREE.Vector3[] = [];
@@ -241,6 +294,243 @@ function geometryToMeshData(geometry: THREE.BufferGeometry): MeshData {
       centerZ: Number.isFinite(minZ) && Number.isFinite(maxZ) ? (minZ + maxZ) / 2 : 0,
     },
   };
+}
+
+function addKeychainLoopToClickerMeshes(
+  meshes: AssignedMesh[],
+  productType: ProductType,
+  params: ProductParams,
+): AssignedMesh[] {
+  if (!shouldAddKeychainLoop(productType, params)) return meshes;
+
+  const placement = getKeychainPlacement(params.keychain_hole_placement);
+  const targetIndex = getClickerKeychainMeshIndex(meshes, placement);
+  if (targetIndex < 0) return meshes;
+
+  return meshes.map((mesh, index) =>
+    index === targetIndex
+      ? {
+          ...mesh,
+          mesh: mergeMeshData(mesh.mesh, createKeychainLoopMesh(mesh.mesh, params, placement)),
+        }
+      : mesh,
+  );
+}
+
+function getClickerKeychainMeshIndex(meshes: AssignedMesh[], placement: KeychainPlacement): number {
+  if (placement === 'top') {
+    return meshes.reduce(
+      (bestIndex, mesh, index) => {
+        if (bestIndex < 0) return index;
+        return mesh.mesh.bounds.maxZ > meshes[bestIndex].mesh.bounds.maxZ ? index : bestIndex;
+      },
+      -1,
+    );
+  }
+
+  return meshes.reduce(
+    (bestIndex, mesh, index) => {
+      if (mesh.part.role !== 'body') return bestIndex;
+      if (bestIndex < 0) return index;
+      return mesh.mesh.bounds.centerZ < meshes[bestIndex].mesh.bounds.centerZ ? index : bestIndex;
+    },
+    -1,
+  );
+}
+
+function shouldAddKeychainLoop(productType: ProductType, params: ProductParams): boolean {
+  return (
+    productType === 'clicker' &&
+    Boolean(params.keychain_hole) &&
+    Number.isFinite(Number(params.keychain_hole_angle_deg))
+  );
+}
+
+function createKeychainLoopMesh(
+  baseMesh: MeshData,
+  params: ProductParams,
+  placement: KeychainPlacement,
+): MeshData {
+  const bounds = baseMesh.bounds;
+  const angle = THREE.MathUtils.degToRad(Number(params.keychain_hole_angle_deg));
+  const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).normalize();
+  const slice = getMeshSliceMetrics(baseMesh, direction, placement);
+  const inset = Math.max(0, Number(params.keychain_hole_inset_mm) || 0);
+  const loopCenter =
+    placement === 'top'
+      ? slice.center.clone()
+      : slice.center
+          .clone()
+          .add(
+            direction
+              .clone()
+              .multiplyScalar(
+                slice.supportDistance +
+                  KEYCHAIN_LOOP_RADIUS_MM -
+                  KEYCHAIN_LOOP_OVERLAP_MM -
+                  inset,
+              ),
+          );
+  loopCenter.z = placement === 'top' ? bounds.maxZ - inset : bounds.minZ;
+
+  const keychainGeometry = new THREE.ExtrudeGeometry(createKeychainShape(), {
+    depth: KEYCHAIN_THICKNESS_MM,
+    bevelEnabled: false,
+    curveSegments: 64,
+    steps: 1,
+  });
+  if (placement === 'top') {
+    keychainGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+    loopCenter.z += KEYCHAIN_LOOP_RADIUS_MM;
+  } else {
+    keychainGeometry.applyMatrix4(
+      new THREE.Matrix4().makeRotationFromQuaternion(
+        new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction.clone().negate()),
+      ),
+    );
+  }
+  keychainGeometry.applyMatrix4(new THREE.Matrix4().makeTranslation(loopCenter.x, loopCenter.y, loopCenter.z));
+
+  return geometryToMeshData(keychainGeometry);
+}
+
+function createKeychainShape(): THREE.Shape {
+  const halfNeckWidth = KEYCHAIN_NECK_WIDTH_MM / 2;
+  const neckJoinY = -Math.sqrt(Math.max(0, KEYCHAIN_LOOP_RADIUS_MM ** 2 - halfNeckWidth ** 2));
+  const rightJoinAngle = Math.atan2(neckJoinY, halfNeckWidth);
+  const leftJoinAngle = Math.atan2(neckJoinY, -halfNeckWidth);
+  const shape = new THREE.Shape();
+  shape.moveTo(halfNeckWidth, neckJoinY);
+  shape.absarc(0, 0, KEYCHAIN_LOOP_RADIUS_MM, rightJoinAngle, leftJoinAngle, false);
+  shape.lineTo(-halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
+  shape.lineTo(halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
+  shape.lineTo(halfNeckWidth, neckJoinY);
+
+  const holePath = new THREE.Path();
+  holePath.absarc(0, 0, KEYCHAIN_HOLE_RADIUS_MM, 0, Math.PI * 2, true);
+  shape.holes.push(holePath);
+  return shape;
+}
+
+function getMeshSliceMetrics(
+  mesh: MeshData,
+  direction: THREE.Vector3,
+  placement: KeychainPlacement,
+): { center: THREE.Vector3; supportDistance: number } {
+  const size = mesh.bounds.max.clone().sub(mesh.bounds.min);
+  const fallbackCenter = mesh.bounds.min.clone().add(mesh.bounds.max).multiplyScalar(0.5);
+  const planeZ = placement === 'top' ? mesh.bounds.maxZ : mesh.bounds.minZ;
+  const tolerance = Math.max(size.z * 0.04, 0.6);
+  const vertices = mesh.vertices.filter((vertex) =>
+    placement === 'top'
+      ? vertex.z >= planeZ - tolerance
+      : vertex.z <= planeZ + tolerance,
+  );
+  const sliceBounds = getVerticesBounds(vertices);
+  const center = sliceBounds ? sliceBounds.min.clone().add(sliceBounds.max).multiplyScalar(0.5) : fallbackCenter;
+  const supportDistance = vertices.reduce(
+    (maxDistance, vertex) => Math.max(maxDistance, vertex.clone().sub(center).dot(direction)),
+    Number.NEGATIVE_INFINITY,
+  );
+
+  return {
+    center,
+    supportDistance: Number.isFinite(supportDistance)
+      ? supportDistance
+      : getBoundsSupportDistance(mesh.bounds, center, direction),
+  };
+}
+
+function getVerticesBounds(vertices: THREE.Vector3[]): MeshData['bounds'] | null {
+  if (vertices.length === 0) return null;
+  return getMeshBounds(vertices);
+}
+
+function getBoundsSupportDistance(
+  bounds: MeshData['bounds'],
+  center: THREE.Vector3,
+  direction: THREE.Vector3,
+): number {
+  const size = bounds.max.clone().sub(bounds.min);
+  const halfWidth = Math.max(size.x / 2, 0.001);
+  const halfDepth = Math.max(size.y / 2, 0.001);
+  return Math.min(
+    Math.abs(direction.x) > 0.0001 ? halfWidth / Math.abs(direction.x) : Number.POSITIVE_INFINITY,
+    Math.abs(direction.y) > 0.0001 ? halfDepth / Math.abs(direction.y) : Number.POSITIVE_INFINITY,
+  );
+}
+
+function getKeychainPlacement(value: ProductParams[string] | undefined): KeychainPlacement {
+  return value === 'top' ? 'top' : 'bottom';
+}
+
+function mergeMeshData(baseMesh: MeshData, addedMesh: MeshData): MeshData {
+  const vertices = [
+    ...baseMesh.vertices.map((vertex) => vertex.clone()),
+    ...addedMesh.vertices.map((vertex) => vertex.clone()),
+  ];
+  const offset = baseMesh.vertices.length;
+  const triangles: Array<[number, number, number]> = [
+    ...baseMesh.triangles,
+    ...addedMesh.triangles.map(
+      (triangle) => [triangle[0] + offset, triangle[1] + offset, triangle[2] + offset] as [number, number, number],
+    ),
+  ];
+
+  return {
+    vertices,
+    triangles,
+    bounds: getMeshBounds(vertices),
+  };
+}
+
+function getMeshBounds(vertices: THREE.Vector3[]): MeshData['bounds'] {
+  const min = new THREE.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+  const max = new THREE.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+  vertices.forEach((vertex) => {
+    min.min(vertex);
+    max.max(vertex);
+  });
+
+  if (vertices.length === 0) {
+    min.set(0, 0, 0);
+    max.set(0, 0, 0);
+  }
+
+  return {
+    min,
+    max,
+    minZ: min.z,
+    maxZ: max.z,
+    centerZ: (min.z + max.z) / 2,
+  };
+}
+
+function serializeMeshDataToBinaryStl(mesh: MeshData): Uint8Array<ArrayBuffer> {
+  const buffer = new ArrayBuffer(84 + mesh.triangles.length * 50);
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const encoder = new TextEncoder();
+  bytes.set(encoder.encode('Horama3D STL export').slice(0, 80), 0);
+  view.setUint32(80, mesh.triangles.length, true);
+
+  mesh.triangles.forEach((triangle, triangleIndex) => {
+    const offset = 84 + triangleIndex * 50;
+    const a = mesh.vertices[triangle[0]];
+    const b = mesh.vertices[triangle[1]];
+    const c = mesh.vertices[triangle[2]];
+    const normal = new THREE.Vector3()
+      .subVectors(b, a)
+      .cross(new THREE.Vector3().subVectors(c, a))
+      .normalize();
+    const values = [normal.x, normal.y, normal.z, a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z];
+    values.forEach((value, valueIndex) => {
+      view.setFloat32(offset + valueIndex * 4, Number.isFinite(value) ? value : 0, true);
+    });
+    view.setUint16(offset + 48, 0, true);
+  });
+
+  return bytes;
 }
 
 function buildBambu3mfProject(meshes: AssignedMesh[], title: string) {
@@ -448,17 +738,17 @@ function getExportMaterial(
   const color =
     productType === 'clicker'
       ? normalizedRole === 'lid'
-        ? getColorParam(params.top_color, '#ffffff')
+        ? getColorParam(params.top_color, DEFAULT_COLOR)
         : normalizedRole === 'body'
-          ? getColorParam(params.bottom_color, '#ffffff')
+          ? getColorParam(params.bottom_color, DEFAULT_COLOR)
           : getBaseColor(productType)
       : productType === 'urn'
         ? normalizedRole === 'text'
           ? getColorParam(params.text_color, '#232629')
           : normalizedRole === 'lid'
-            ? getColorParam(params.lid_color, '#ffffff')
+            ? getColorParam(params.lid_color, DEFAULT_COLOR)
             : normalizedRole === 'body'
-              ? getColorParam(params.body_color, '#ffffff')
+              ? getColorParam(params.body_color, DEFAULT_COLOR)
               : getBaseColor(productType)
         : getBaseColor(productType);
 
@@ -505,7 +795,7 @@ function buildBambuFilamentMaps(materialCount: number): string {
 
 function buildBambuProjectSettingsJson(materials: ExportMaterial[]): string {
   const materialColors = materials.map((material) => material.color.slice(0, 7));
-  const filamentColours = materialColors.length > 0 ? materialColors : ['#FFFFFF'];
+  const filamentColours = materialColors.length > 0 ? materialColors : [DEFAULT_COLOR];
   const materialCount = filamentColours.length;
   const repeated = (value: string) => Array.from({ length: materialCount }, () => value);
   const filamentIndexes = Array.from({ length: materialCount }, (_, index) => String(index + 1));
@@ -688,15 +978,15 @@ function getColorParam(value: ProductParams[string] | undefined, fallback: strin
 function getSelectedColors(productType: ProductType, params: ProductParams): Record<string, string> | undefined {
   if (productType === 'clicker') {
     return {
-      bottom_color: normalizeHexColor(getColorParam(params.bottom_color, '#ffffff')),
-      top_color: normalizeHexColor(getColorParam(params.top_color, '#ffffff')),
+      bottom_color: normalizeHexColor(getColorParam(params.bottom_color, DEFAULT_COLOR)),
+      top_color: normalizeHexColor(getColorParam(params.top_color, DEFAULT_COLOR)),
     };
   }
 
   if (productType === 'urn') {
     return {
-      body_color: normalizeHexColor(getColorParam(params.body_color, '#ffffff')),
-      lid_color: normalizeHexColor(getColorParam(params.lid_color, '#ffffff')),
+      body_color: normalizeHexColor(getColorParam(params.body_color, DEFAULT_COLOR)),
+      lid_color: normalizeHexColor(getColorParam(params.lid_color, DEFAULT_COLOR)),
       text_color: normalizeHexColor(getColorParam(params.text_color, '#232629')),
     };
   }
@@ -705,9 +995,8 @@ function getSelectedColors(productType: ProductType, params: ProductParams): Rec
 }
 
 function getBaseColor(productType: ProductType): string {
-  if (productType === 'urn') return '#2f8f83';
-  if (productType === 'textures') return '#6f6ad8';
-  return '#b6682f';
+  void productType;
+  return DEFAULT_COLOR;
 }
 
 function normalizeHexColor(color: string): string {
@@ -716,7 +1005,7 @@ function normalizeHexColor(color: string): string {
   if (/^#[0-9a-f]{3}$/i.test(value)) {
     return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`.toUpperCase();
   }
-  return '#FFFFFF';
+  return DEFAULT_COLOR;
 }
 
 function createZip(

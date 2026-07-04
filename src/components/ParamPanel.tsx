@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type {
   GeneratedModel,
   ParamDefinition,
@@ -27,6 +28,11 @@ export function ParamPanel({
   showMaterialControls = false,
   onChange,
 }: ParamPanelProps) {
+  const [openSections, setOpenSections] = useState({
+    parameters: false,
+    materials: false,
+    transformInfo: false,
+  });
   const urnInfo = product.type === 'urn' ? modelMetadata?.urn : undefined;
   const clickerInfo = product.type === 'clicker' ? modelMetadata?.clicker : undefined;
   const transformInfoRows = urnInfo
@@ -35,7 +41,42 @@ export function ParamPanel({
       ? getClickerInfoRows(clickerInfo)
       : [];
   const colorParams = product.params.filter((param) => param.kind === 'color');
-  const mainParams = product.params.filter((param) => param.kind !== 'color');
+  const postProcessingParams =
+    product.type === 'clicker'
+      ? product.params.filter((param) =>
+          [
+            'keychain_hole',
+            'keychain_hole_placement',
+            'keychain_hole_angle_deg',
+            'keychain_hole_inset_mm',
+          ].includes(param.key),
+        )
+      : [];
+  const mainParams = product.params.filter(
+    (param) =>
+      param.kind !== 'color' &&
+      !postProcessingParams.some((postParam) => postParam.key === param.key),
+  );
+  const visiblePostProcessingParams = postProcessingParams.filter(
+    (param) =>
+      param.key === 'keychain_hole' ||
+      (Boolean(params.keychain_hole) &&
+        (
+          param.key !== 'keychain_hole_angle_deg' ||
+          params.keychain_hole_placement !== 'top'
+        )),
+  );
+  const shouldShowPostProcessingSection =
+    showMaterialControls &&
+    (colorParams.length > 0 || visiblePostProcessingParams.length > 0);
+  const hasVisibleColors = showMaterialControls && colorParams.length > 0;
+  const hasVisiblePostProcessing = visiblePostProcessingParams.length > 0;
+  const toggleSection = (section: keyof typeof openSections) => {
+    setOpenSections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
+  };
 
   return (
     <aside className={disabled ? 'panel panel-right panel-disabled' : 'panel panel-right'}>
@@ -49,27 +90,16 @@ export function ParamPanel({
         )}
       </div>
 
-      <div className="controls">
-        {mainParams.map((param) => (
-          <ParamControl
-            key={param.key}
-            param={param}
-            value={params[param.key] ?? param.defaultValue}
-            disabled={disabled}
-            override={paramOverrides[param.key]}
-            onChange={(value) => onChange(param.key, value)}
-          />
-        ))}
-      </div>
-
-      {showMaterialControls && colorParams.length > 0 && (
-        <section className="color-section" aria-label="Model colors">
-          <div className="section-heading">
-            <p className="eyebrow">Colors</p>
-            <h3>Preview materials</h3>
-          </div>
-          <div className="controls color-controls">
-            {colorParams.map((param) => (
+      <section className="main-param-section" aria-label={`${product.name} parameters`}>
+        <CollapsibleHeading
+          eyebrow="Setup"
+          title="Parameters"
+          isOpen={openSections.parameters}
+          onToggle={() => toggleSection('parameters')}
+        />
+        {openSections.parameters && (
+          <div className="controls">
+            {mainParams.map((param) => (
               <ParamControl
                 key={param.key}
                 param={param}
@@ -80,29 +110,106 @@ export function ParamPanel({
               />
             ))}
           </div>
+        )}
+      </section>
+
+      {shouldShowPostProcessingSection && (
+        <section className="color-section" aria-label="Model post processing">
+          <CollapsibleHeading
+            eyebrow={hasVisibleColors ? 'Materials and keychain options' : 'Post processing'}
+            title={
+              hasVisibleColors && hasVisiblePostProcessing
+                ? 'Colors'
+                : hasVisiblePostProcessing
+                  ? 'Keychain'
+                  : 'Preview materials'
+            }
+            isOpen={openSections.materials}
+            onToggle={() => toggleSection('materials')}
+          />
+          {openSections.materials && (
+            <div className="controls color-controls">
+              {hasVisibleColors && colorParams.map((param) => (
+                <ParamControl
+                  key={param.key}
+                  param={param}
+                  value={params[param.key] ?? param.defaultValue}
+                  disabled={disabled}
+                  override={paramOverrides[param.key]}
+                  onChange={(value) => onChange(param.key, value)}
+                />
+              ))}
+              {visiblePostProcessingParams.map((param) => (
+                <ParamControl
+                  key={param.key}
+                  param={param}
+                  value={params[param.key] ?? param.defaultValue}
+                  disabled={disabled}
+                  override={paramOverrides[param.key]}
+                  onChange={(value) => onChange(param.key, value)}
+                />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
       {transformInfoRows.length > 0 && (
         <section className="transform-info" aria-label={`${product.name} transform information`}>
-          <div className="section-heading">
-            <p className="eyebrow">Transform info</p>
-            <h3>Generated {product.type === 'clicker' ? 'clicker' : 'urn'}</h3>
-          </div>
-          <dl>
-            {transformInfoRows.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-          {modelMetadata?.objects && modelMetadata.objects.length > 0 && (
-            <p className="object-list">Objects: {modelMetadata.objects.join(', ')}</p>
+          <CollapsibleHeading
+            eyebrow="Transform info"
+            title={`Generated ${product.type === 'clicker' ? 'clicker' : 'urn'}`}
+            isOpen={openSections.transformInfo}
+            onToggle={() => toggleSection('transformInfo')}
+          />
+          {openSections.transformInfo && (
+            <>
+              <dl>
+                {transformInfoRows.map((row) => (
+                  <div key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+              {modelMetadata?.objects && modelMetadata.objects.length > 0 && (
+                <p className="object-list">Objects: {modelMetadata.objects.join(', ')}</p>
+              )}
+            </>
           )}
         </section>
       )}
     </aside>
+  );
+}
+
+interface CollapsibleHeadingProps {
+  eyebrow: string;
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+function CollapsibleHeading({
+  eyebrow,
+  title,
+  isOpen,
+  onToggle,
+}: CollapsibleHeadingProps) {
+  return (
+    <button
+      className="collapsible-heading"
+      type="button"
+      aria-expanded={isOpen}
+      aria-label={`${isOpen ? 'Hide' : 'Show'} ${eyebrow}`}
+      onClick={onToggle}
+    >
+      <span>
+        <p className="eyebrow">{eyebrow}</p>
+        {isOpen && <h3>{title}</h3>}
+      </span>
+      <strong>{isOpen ? 'Hide' : 'Show'}</strong>
+    </button>
   );
 }
 

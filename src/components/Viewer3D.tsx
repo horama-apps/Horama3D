@@ -5,6 +5,15 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { GeneratedModel, ModelBounds, ProductParams, ProductType } from '../types';
+import {
+  DEFAULT_COLOR,
+  KEYCHAIN_HOLE_RADIUS_MM,
+  KEYCHAIN_LOOP_OVERLAP_MM,
+  KEYCHAIN_LOOP_RADIUS_MM,
+  KEYCHAIN_NECK_LENGTH_MM,
+  KEYCHAIN_NECK_WIDTH_MM,
+  KEYCHAIN_THICKNESS_MM,
+} from '../config/constants';
 
 interface Viewer3DProps {
   productType: ProductType;
@@ -36,6 +45,7 @@ export function Viewer3D({
     controls: OrbitControls;
     modelRoot: THREE.Group;
     cutPlaneRoot: THREE.Group;
+    keychainHoleRoot: THREE.Group;
     frameModel: () => ModelBounds | null;
     cleanup: () => void;
   } | null>(null);
@@ -79,6 +89,9 @@ export function Viewer3D({
 
     const cutPlaneRoot = new THREE.Group();
     scene.add(cutPlaneRoot);
+
+    const keychainHoleRoot = new THREE.Group();
+    scene.add(keychainHoleRoot);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -126,12 +139,14 @@ export function Viewer3D({
       controls,
       modelRoot,
       cutPlaneRoot,
+      keychainHoleRoot,
       frameModel,
       cleanup: () => {
         cancelAnimationFrame(raf);
         window.removeEventListener('resize', onResize);
         clearGroup(modelRoot);
         clearGroup(cutPlaneRoot);
+        clearGroup(keychainHoleRoot);
         controls.dispose();
         pmrem.dispose();
         renderer.dispose();
@@ -147,6 +162,7 @@ export function Viewer3D({
     if (!context) return;
 
     clearGroup(context.modelRoot);
+    clearGroup(context.keychainHoleRoot);
     setLiveBounds(null);
     onModelBoundsChange?.(null);
     context.modelRoot.position.set(0, 0, 0);
@@ -241,6 +257,45 @@ export function Viewer3D({
     context.cutPlaneRoot.add(plane);
   }, [liveBounds, model?.source, params.cut_height_mm, productType, showCutPlane]);
 
+  useEffect(() => {
+    const context = sceneRef.current;
+    if (!context) return;
+
+    clearGroup(context.keychainHoleRoot);
+    const bounds = liveBounds;
+    const angleDeg = Number(params.keychain_hole_angle_deg);
+    const shouldShowHole =
+      productType === 'clicker' &&
+      model?.source === 'api' &&
+      Boolean(params.keychain_hole) &&
+      bounds &&
+      Number.isFinite(angleDeg);
+
+    if (!shouldShowHole) return;
+
+    const placement = getKeychainPlacement(params.keychain_hole_placement);
+    const target = getKeychainTarget(context.modelRoot, placement, angleDeg);
+    if (!target) return;
+
+    const color =
+      placement === 'top'
+        ? getColorParam(params.top_color, DEFAULT_COLOR)
+        : getColorParam(params.bottom_color, DEFAULT_COLOR);
+    const inset = Math.max(0, Number(params.keychain_hole_inset_mm) || 0);
+    const tab = createKeychainTab(target, angleDeg, inset, color);
+    context.keychainHoleRoot.add(tab);
+  }, [
+    liveBounds,
+    model?.source,
+    params.bottom_color,
+    params.keychain_hole,
+    params.keychain_hole_angle_deg,
+    params.keychain_hole_inset_mm,
+    params.keychain_hole_placement,
+    params.top_color,
+    productType,
+  ]);
+
   return <div className="viewer" ref={hostRef} />;
 }
 
@@ -274,6 +329,210 @@ function createCutPlane(size: number): THREE.Group {
   return group;
 }
 
+type KeychainPlacement = 'bottom' | 'top';
+
+interface KeychainTarget {
+  bounds: THREE.Box3;
+  center: THREE.Vector3;
+  placement: KeychainPlacement;
+  supportDistance?: number;
+  z: number;
+}
+
+interface KeychainMeshCandidate {
+  mesh: THREE.Mesh;
+  bounds: THREE.Box3;
+  score: number;
+}
+
+function createKeychainTab(
+  target: KeychainTarget,
+  angleDeg: number,
+  inset: number,
+  color: THREE.ColorRepresentation,
+): THREE.Group {
+  const group = new THREE.Group();
+  const angle = THREE.MathUtils.degToRad(angleDeg);
+  const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).normalize();
+  const loopCenter =
+    target.placement === 'top'
+      ? target.center.clone()
+      : target.center
+          .clone()
+          .add(
+            direction
+              .clone()
+                  .multiplyScalar(
+                    (target.supportDistance ?? 0) +
+                  KEYCHAIN_LOOP_RADIUS_MM -
+                  KEYCHAIN_LOOP_OVERLAP_MM -
+                  inset,
+              ),
+          );
+  loopCenter.z = target.placement === 'top' ? target.z - inset : target.z;
+  const material = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.55,
+    metalness: 0.04,
+  });
+
+  const keychain = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(createKeychainShape(), {
+      depth: KEYCHAIN_THICKNESS_MM,
+      bevelEnabled: false,
+      curveSegments: 64,
+      steps: 1,
+    }),
+    material,
+  );
+  keychain.position.copy(loopCenter);
+  if (target.placement === 'top') {
+    keychain.rotation.x = Math.PI / 2;
+    keychain.position.z += KEYCHAIN_LOOP_RADIUS_MM;
+  }
+  if (target.placement === 'bottom') {
+    keychain.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction.clone().negate());
+  }
+  keychain.renderOrder = 7;
+  group.add(keychain);
+
+  return group;
+}
+
+function createKeychainShape(): THREE.Shape {
+  const halfNeckWidth = KEYCHAIN_NECK_WIDTH_MM / 2;
+  const neckJoinY = -Math.sqrt(Math.max(0, KEYCHAIN_LOOP_RADIUS_MM ** 2 - halfNeckWidth ** 2));
+  const rightJoinAngle = Math.atan2(neckJoinY, halfNeckWidth);
+  const leftJoinAngle = Math.atan2(neckJoinY, -halfNeckWidth);
+  const shape = new THREE.Shape();
+  shape.moveTo(halfNeckWidth, neckJoinY);
+  shape.absarc(0, 0, KEYCHAIN_LOOP_RADIUS_MM, rightJoinAngle, leftJoinAngle, false);
+  shape.lineTo(-halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
+  shape.lineTo(halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
+  shape.lineTo(halfNeckWidth, neckJoinY);
+
+  const holePath = new THREE.Path();
+  holePath.absarc(0, 0, KEYCHAIN_HOLE_RADIUS_MM, 0, Math.PI * 2, true);
+  shape.holes.push(holePath);
+  return shape;
+}
+
+function getKeychainTarget(
+  root: THREE.Group,
+  placement: KeychainPlacement,
+  angleDeg: number,
+): KeychainTarget | null {
+  const direction = new THREE.Vector3(
+    Math.cos(THREE.MathUtils.degToRad(angleDeg)),
+    Math.sin(THREE.MathUtils.degToRad(angleDeg)),
+    0,
+  ).normalize();
+  const candidates: KeychainMeshCandidate[] = [];
+
+  root.updateWorldMatrix(true, true);
+  root.traverse((node) => {
+    if (!(node instanceof THREE.Mesh)) return;
+    if (placement === 'bottom' && getObjectRole(node) !== 'body') return;
+    const meshBox = new THREE.Box3().setFromObject(node);
+    if (meshBox.isEmpty()) return;
+    const score =
+      placement === 'top'
+        ? meshBox.max.z
+        : meshBox.getCenter(new THREE.Vector3()).z;
+    candidates.push({ mesh: node, bounds: meshBox, score });
+  });
+
+  const selected = candidates.sort((a, b) =>
+    placement === 'top' ? b.score - a.score : a.score - b.score,
+  )[0];
+  if (!selected) return null;
+
+  const slice = getMeshSliceMetrics(
+    selected.mesh,
+    selected.bounds,
+    direction,
+    placement,
+  );
+  return {
+    bounds: selected.bounds,
+    center: slice.center,
+    placement,
+    supportDistance: slice.supportDistance,
+    z: placement === 'top' ? selected.bounds.max.z : selected.bounds.min.z,
+  };
+}
+
+function getMeshSliceMetrics(
+  mesh: THREE.Mesh,
+  bounds: THREE.Box3,
+  direction: THREE.Vector3,
+  placement: KeychainPlacement,
+): { center: THREE.Vector3; supportDistance: number } {
+  const position = mesh.geometry.getAttribute('position');
+  const fallbackCenter = bounds.getCenter(new THREE.Vector3());
+  if (!position) {
+    return {
+      center: fallbackCenter,
+      supportDistance: getBoundsSupportDistance(bounds, fallbackCenter, direction),
+    };
+  }
+
+  const size = bounds.getSize(new THREE.Vector3());
+  const planeZ = placement === 'top' ? bounds.max.z : bounds.min.z;
+  const tolerance = Math.max(size.z * 0.04, 0.6);
+  const vertices: THREE.Vector3[] = [];
+  const vertex = new THREE.Vector3();
+  for (let index = 0; index < position.count; index += 1) {
+    vertex
+      .fromBufferAttribute(position, index)
+      .applyMatrix4(mesh.matrixWorld);
+    const isOnSlice =
+      placement === 'top'
+        ? vertex.z >= planeZ - tolerance
+        : vertex.z <= planeZ + tolerance;
+    if (isOnSlice) vertices.push(vertex.clone());
+  }
+
+  const sliceBounds = getVerticesBounds(vertices);
+  const center = sliceBounds?.getCenter(new THREE.Vector3()) ?? fallbackCenter;
+  const supportDistance = vertices.reduce(
+    (maxDistance, item) => Math.max(maxDistance, item.clone().sub(center).dot(direction)),
+    Number.NEGATIVE_INFINITY,
+  );
+
+  return {
+    center,
+    supportDistance: Number.isFinite(supportDistance)
+      ? supportDistance
+      : getBoundsSupportDistance(bounds, center, direction),
+  };
+}
+
+function getVerticesBounds(vertices: THREE.Vector3[]): THREE.Box3 | null {
+  if (vertices.length === 0) return null;
+  const box = new THREE.Box3();
+  vertices.forEach((vertex) => box.expandByPoint(vertex));
+  return box;
+}
+
+function getBoundsSupportDistance(
+  bounds: THREE.Box3,
+  center: THREE.Vector3,
+  direction: THREE.Vector3,
+): number {
+  const size = bounds.getSize(new THREE.Vector3());
+  const halfWidth = Math.max(size.x / 2, 0.001);
+  const halfDepth = Math.max(size.y / 2, 0.001);
+  return Math.min(
+    Math.abs(direction.x) > 0.0001 ? halfWidth / Math.abs(direction.x) : Number.POSITIVE_INFINITY,
+    Math.abs(direction.y) > 0.0001 ? halfDepth / Math.abs(direction.y) : Number.POSITIVE_INFINITY,
+  );
+}
+
+function getKeychainPlacement(value: ProductParams[string] | undefined): KeychainPlacement {
+  return value === 'top' ? 'top' : 'bottom';
+}
+
 function createModelMaterial(
   productType: ProductType,
   source: GeneratedModel['source'],
@@ -295,14 +554,14 @@ function getMaterialColor(
 ): THREE.ColorRepresentation {
   if (source === 'upload') return getBaseModelColor(productType, source);
   if (productType === 'clicker') {
-    if (role === 'lid') return getColorParam(params.top_color, '#ffffff');
-    if (role === 'body') return getColorParam(params.bottom_color, '#ffffff');
+    if (role === 'lid') return getColorParam(params.top_color, DEFAULT_COLOR);
+    if (role === 'body') return getColorParam(params.bottom_color, DEFAULT_COLOR);
     return getBaseModelColor(productType, source);
   }
   if (productType !== 'urn') return getBaseModelColor(productType, source);
   if (role === 'text') return getColorParam(params.text_color, '#232629');
-  if (role === 'lid') return getColorParam(params.lid_color, '#ffffff');
-  if (role === 'body') return getColorParam(params.body_color, '#ffffff');
+  if (role === 'lid') return getColorParam(params.lid_color, DEFAULT_COLOR);
+  if (role === 'body') return getColorParam(params.body_color, DEFAULT_COLOR);
   return getBaseModelColor(productType, source);
 }
 
@@ -311,15 +570,8 @@ function getColorParam(value: ProductParams[string] | undefined, fallback: strin
 }
 
 function getBaseModelColor(productType: ProductType, source: GeneratedModel['source']): THREE.ColorRepresentation {
-  return (
-    source === 'upload'
-      ? 0x7f8d92
-      : productType === 'urn'
-        ? 0x2f8f83
-        : productType === 'textures'
-          ? 0x6f6ad8
-          : 0xb6682f
-  );
+  if (source === 'upload') return 0x7f8d92;
+  return DEFAULT_COLOR;
 }
 
 function applyNamedMaterials(
@@ -376,7 +628,7 @@ function clearGroup(group: THREE.Group) {
         node.geometry.dispose();
         const materials = Array.isArray(node.material) ? node.material : [node.material];
         materials.forEach((material) => material.dispose());
-      } else if (node instanceof THREE.LineSegments) {
+      } else if (node instanceof THREE.LineSegments || node instanceof THREE.Line) {
         node.geometry.dispose();
         const materials = Array.isArray(node.material) ? node.material : [node.material];
         materials.forEach((material) => material.dispose());

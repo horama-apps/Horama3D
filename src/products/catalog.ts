@@ -1,11 +1,17 @@
 import type { ProductDefinition, ProductParams, ProductType } from '../types';
+import {
+  CLICKER_ACCENT_COLOR,
+  DEFAULT_COLOR,
+  TEXTURES_ACCENT_COLOR,
+  URN_ACCENT_COLOR,
+} from '../config/constants';
 
 export const products: ProductDefinition[] = [
   {
     type: 'urn',
     name: 'Urns',
     description: 'Urn transform settings from the STP urn workflow.',
-    accent: '#2f8f83',
+    accent: URN_ACCENT_COLOR,
     params: [
       {
         kind: 'select',
@@ -31,13 +37,13 @@ export const products: ProductDefinition[] = [
         kind: 'color',
         key: 'body_color',
         label: 'Body color',
-        defaultValue: '#FFFFFF',
+        defaultValue: DEFAULT_COLOR,
       },
       {
         kind: 'color',
         key: 'lid_color',
         label: 'Lid color',
-        defaultValue: '#FFFFFF',
+        defaultValue: DEFAULT_COLOR,
       },
       {
         kind: 'color',
@@ -80,7 +86,7 @@ export const products: ProductDefinition[] = [
     type: 'clicker',
     name: 'Clickers',
     description: 'Button body, cap size, switch clearance, and keychain options.',
-    accent: '#b6682f',
+    accent: CLICKER_ACCENT_COLOR,
     params: [
       {
         kind: 'number',
@@ -106,13 +112,49 @@ export const products: ProductDefinition[] = [
         kind: 'color',
         key: 'bottom_color',
         label: 'Bottom color',
-        defaultValue: '#FFFFFF',
+        defaultValue: DEFAULT_COLOR,
       },
       {
         kind: 'color',
         key: 'top_color',
         label: 'Top color',
-        defaultValue: '#FFFFFF',
+        defaultValue: DEFAULT_COLOR,
+      },
+      {
+        kind: 'boolean',
+        key: 'keychain_hole',
+        label: 'Keychain hole',
+        defaultValue: false,
+      },
+      {
+        kind: 'select',
+        key: 'keychain_hole_placement',
+        label: 'Keychain placement',
+        defaultValue: 'bottom',
+        options: [
+          { label: 'Bottom base', value: 'bottom' },
+          { label: 'Top object', value: 'top' },
+        ],
+      },
+      {
+        kind: 'number',
+        key: 'keychain_hole_angle_deg',
+        label: 'Hole position',
+        unit: 'deg',
+        min: 0,
+        max: 360,
+        step: 1,
+        defaultValue: 0,
+      },
+      {
+        kind: 'number',
+        key: 'keychain_hole_inset_mm',
+        label: 'Move toward origin',
+        unit: 'mm',
+        min: 0,
+        max: 24,
+        step: 0.5,
+        defaultValue: 0,
       },
     ],
   },
@@ -120,7 +162,7 @@ export const products: ProductDefinition[] = [
     type: 'textures',
     name: 'Textures',
     description: 'Raised printable surface patterns from the generic transform flow.',
-    accent: '#6f6ad8',
+    accent: TEXTURES_ACCENT_COLOR,
     params: [
       {
         kind: 'select',

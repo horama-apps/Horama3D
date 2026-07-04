@@ -642,6 +642,11 @@ a {
   gap: 18px;
 }
 
+.main-param-section {
+  display: grid;
+  gap: 14px;
+}
+
 .color-section,
 .transform-info {
   display: grid;
@@ -651,11 +656,47 @@ a {
   border-top: 1px solid rgba(32, 35, 38, 0.12);
 }
 
-.section-heading h3 {
+.collapsible-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collapsible-heading span {
+  min-width: 0;
+}
+
+.collapsible-heading h3 {
   margin: 2px 0 0;
   color: #1f2225;
   font-size: 1rem;
   line-height: 1.2;
+}
+
+.collapsible-heading strong {
+  margin-top: 2px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.collapsible-heading:hover h3,
+.collapsible-heading:focus-visible h3 {
+  color: var(--accent);
+}
+
+.collapsible-heading:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 36%, transparent);
+  outline-offset: 4px;
 }
 
 .color-controls {
