@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Download, FileUp, Loader2, RotateCcw, Wand2 } from 'lucide-react';
+import { Box, Download, FileType2, FileUp, Loader2, RotateCcw, Wand2 } from 'lucide-react';
 import { analyzeModel, generateModel } from './api/stpApi';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
+import { exportModel, getDefaultExportName, type DownloadFormat } from './export/modelExport';
 import { getDefaultParams, getProduct, products } from './products/catalog';
 import type { GeneratedModel, ModelBounds, ProductParams, ProductType } from './types';
 
@@ -30,6 +31,8 @@ export function App() {
   const [status, setStatus] = useState('Load an STL to inspect it in the viewer');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('stl');
   const [isModelValidated, setIsModelValidated] = useState(false);
   const [hasUsedViewerActions, setHasUsedViewerActions] = useState(false);
   const [isCutPlaneDismissed, setIsCutPlaneDismissed] = useState(false);
@@ -274,7 +277,38 @@ export function App() {
     }
   };
 
-  const downloadHref = model?.downloadUrl ?? model?.modelUrl;
+  const runDownload = async () => {
+    if (!model || model.source === 'empty' || isExporting) return;
+
+    setHasUsedViewerActions(true);
+    setIsExporting(true);
+    setStatus(downloadFormat === '3mf' ? 'Preparing 3MF with preview materials...' : 'Preparing STL ZIP...');
+
+    try {
+      const exported = await exportModel(model, productType, params, downloadFormat);
+      const url = URL.createObjectURL(exported.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = exported.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus(`Downloaded ${exported.filename}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Download failed';
+      setStatus(message);
+      showToast({
+        tone: 'error',
+        placement: 'center',
+        title: message,
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const canDownload = Boolean(model && model.source !== 'empty');
   const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
 
   return (
@@ -341,20 +375,38 @@ export function App() {
             <RotateCcw size={17} />
             <span>Reset</span>
           </button>
-          <a
-            className={downloadHref ? 'tool-action' : 'tool-action disabled'}
-            href={downloadHref}
-            download={model?.name ?? `${productType}-stp-model.${model?.format ?? 'stl'}`}
-            aria-disabled={!downloadHref}
-            aria-label="Download"
-            title="Download"
-            onClick={() => {
-              if (downloadHref) setHasUsedViewerActions(true);
-            }}
+          <div
+            className={
+              canDownload && !isExporting
+                ? 'download-format-control'
+                : 'download-format-control download-format-control-disabled'
+            }
+            title="Download format"
           >
-            <Download size={17} />
+            <FileType2 size={17} />
+            <span className="format-label">Formato</span>
+            <strong>{downloadFormat.toUpperCase()}</strong>
+            <select
+              className="download-format-select"
+              value={downloadFormat}
+              disabled={!canDownload || isExporting}
+              aria-label="Download format"
+              onChange={(event) => setDownloadFormat(event.target.value as DownloadFormat)}
+            >
+              <option value="stl">STL</option>
+              <option value="3mf">3MF</option>
+            </select>
+          </div>
+          <button
+            className="tool-action"
+            disabled={!canDownload || isExporting}
+            aria-label={`Download ${getDefaultExportName(model, productType, downloadFormat)}`}
+            title="Download"
+            onClick={runDownload}
+          >
+            {isExporting ? <Loader2 className="spin" size={17} /> : <Download size={17} />}
             <span>Download</span>
-          </a>
+          </button>
         </div>
         <Viewer3D
           productType={productType}

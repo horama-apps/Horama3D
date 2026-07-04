@@ -165,7 +165,7 @@ export function Viewer3D({
           geometry.computeVertexNormals();
           const mesh = new THREE.Mesh(
             geometry,
-            createModelMaterial(productType, model.source, params, getPreviewRole(previewFile.role)),
+            createModelMaterial(productType, model.source, params, getPreviewRole(previewFile.role, previewFile.object)),
           );
           mesh.name = previewFile.object ?? previewFile.role;
           context.modelRoot.add(mesh);
@@ -346,13 +346,15 @@ function getObjectRole(node: THREE.Object3D): PreviewRole {
   return 'body';
 }
 
-function getPreviewRole(role: string): PreviewRole {
-  const normalized = role.toLowerCase();
-  if (normalized === 'lid') return 'lid';
-  if (normalized === 'text') return 'text';
-  if (normalized === 'detail') return 'detail';
-  if (normalized === 'support') return 'support';
-  if (normalized === 'texture') return 'texture';
+function getPreviewRole(role: string, object?: string): PreviewRole {
+  const normalized = `${role} ${object ?? ''}`.toLowerCase();
+  if (/(^|[^a-z0-9])(text|label|letter|letters|engraving|inscription)([^a-z0-9]|$)/.test(normalized)) {
+    return 'text';
+  }
+  if (/(^|[^a-z0-9])(lid|top|cap|cover)([^a-z0-9]|$)/.test(normalized)) return 'lid';
+  if (/(^|[^a-z0-9])detail([^a-z0-9]|$)/.test(normalized)) return 'detail';
+  if (/(^|[^a-z0-9])support([^a-z0-9]|$)/.test(normalized)) return 'support';
+  if (/(^|[^a-z0-9])texture([^a-z0-9]|$)/.test(normalized)) return 'texture';
   return 'body';
 }
 
