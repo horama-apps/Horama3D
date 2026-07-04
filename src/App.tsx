@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  ChevronDown,
   Download,
-  FileType2,
   FileUp,
   Loader2,
   RotateCcw,
@@ -64,8 +64,10 @@ export function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlRef = useRef<string | null>(null);
+  const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const toastIdRef = useRef(0);
   const toastTimeoutRefs = useRef<number[]>([]);
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
 
   const params = paramsByType[productType];
   const isLocked = !isModelValidated;
@@ -95,6 +97,31 @@ export function App() {
       toastTimeoutRefs.current.forEach(window.clearTimeout);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isDownloadMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        downloadMenuRef.current &&
+        !downloadMenuRef.current.contains(event.target as Node)
+      ) {
+        setIsDownloadMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsDownloadMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDownloadMenuOpen]);
 
   const showToast = (toast: Omit<Toast, 'id'>, duration = 3600) => {
     const id = toastIdRef.current + 1;
@@ -330,13 +357,14 @@ export function App() {
     }
   };
 
-  const runDownload = async () => {
+  const runDownload = async (format = downloadFormat) => {
     if (!model || model.source === 'empty' || isExporting) return;
 
+    setDownloadFormat(format);
     setHasUsedViewerActions(true);
     setIsExporting(true);
     setStatus(
-      downloadFormat === '3mf'
+      format === '3mf'
         ? 'Preparing 3MF with preview materials...'
         : 'Preparing STL ZIP...',
     );
@@ -346,7 +374,7 @@ export function App() {
         model,
         productType,
         params,
-        downloadFormat,
+        format,
       );
       const url = URL.createObjectURL(exported.blob);
       const link = document.createElement('a');
@@ -374,6 +402,7 @@ export function App() {
 
   const canDownload = Boolean(model && model.source !== 'empty');
   const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
+  const downloadFormats: DownloadFormat[] = ['stl', '3mf'];
 
   return (
     <main
@@ -471,44 +500,43 @@ export function App() {
             <RotateCcw size={17} />
             <span>Reset</span>
           </button>
-          <div
-            className={
-              canDownload && !isExporting
-                ? 'download-format-control'
-                : 'download-format-control download-format-control-disabled'
-            }
-            title='Download format'
-          >
-            <FileType2 size={17} />
-            <span className='format-label'>Formato</span>
-            <strong>{downloadFormat.toUpperCase()}</strong>
-            <select
-              className='download-format-select'
-              value={downloadFormat}
+          <div className='download-menu' ref={downloadMenuRef}>
+            <button
+              className='tool-action download-menu-trigger'
               disabled={!canDownload || isExporting}
-              aria-label='Download format'
-              onChange={(event) =>
-                setDownloadFormat(event.target.value as DownloadFormat)
-              }
+              aria-label={`Download ${getDefaultExportName(model, productType, downloadFormat)}`}
+              aria-haspopup='menu'
+              aria-expanded={isDownloadMenuOpen}
+              title='Download'
+              onClick={() => setIsDownloadMenuOpen((isOpen) => !isOpen)}
             >
-              <option value='stl'>STL</option>
-              <option value='3mf'>3MF</option>
-            </select>
+              {isExporting ? (
+                <Loader2 className='spin' size={17} />
+              ) : (
+                <Download size={17} />
+              )}
+              <span>Download</span>
+              <ChevronDown className='download-menu-chevron' size={15} />
+            </button>
+            {isDownloadMenuOpen && canDownload && !isExporting ? (
+              <div className='download-menu-list' role='menu'>
+                {downloadFormats.map((format) => (
+                  <button
+                    key={format}
+                    className='download-menu-item'
+                    type='button'
+                    role='menuitem'
+                    onClick={() => {
+                      setIsDownloadMenuOpen(false);
+                      void runDownload(format);
+                    }}
+                  >
+                    {format.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
-          <button
-            className='tool-action'
-            disabled={!canDownload || isExporting}
-            aria-label={`Download ${getDefaultExportName(model, productType, downloadFormat)}`}
-            title='Download'
-            onClick={runDownload}
-          >
-            {isExporting ? (
-              <Loader2 className='spin' size={17} />
-            ) : (
-              <Download size={17} />
-            )}
-            <span>Download</span>
-          </button>
         </div>
         <Viewer3D
           productType={productType}

@@ -23,10 +23,19 @@ interface AssignedMesh {
   mesh: MeshData;
 }
 
+interface PreparedBambuMesh extends AssignedMesh {
+  centeredVertices: THREE.Vector3[];
+  center: THREE.Vector3;
+  componentTranslation: THREE.Vector3;
+  extruder: number;
+}
+
 interface MeshData {
   vertices: THREE.Vector3[];
   triangles: Array<[number, number, number]>;
   bounds: {
+    min: THREE.Vector3;
+    max: THREE.Vector3;
     minZ: number;
     maxZ: number;
     centerZ: number;
@@ -114,13 +123,11 @@ async function export3mf(
     mesh,
   }));
 
-  const materials = getUniqueMaterials(meshes);
-  const modelXml = build3mfModelXml(meshes, materials);
-  const slicerModelConfigXml = buildSlic3rModelConfigXml(meshes, materials);
-  const slicerPrintConfig = buildSlic3rPrintConfig(materials);
-  const projectSettingsJson = buildBambuProjectSettingsJson(materials);
+  const title = getBaseName(getDefaultExportName(model, productType, '3mf'));
+  const bambuProject = buildBambu3mfProject(meshes, title);
   const metadata = {
     application: 'Horama3D',
+    exporter: 'BambuStudio-compatible Horama3D exporter',
     sourceFormat: 'stl',
     productType,
     exportedAt: new Date().toISOString(),
@@ -135,12 +142,16 @@ async function export3mf(
 
   return {
     blob: createZip([
-      { name: '[Content_Types].xml', data: encodeText(buildContentTypesXml()) },
+      { name: '[Content_Types].xml', data: encodeText(buildBambuContentTypesXml()) },
       { name: '_rels/.rels', data: encodeText(buildRelsXml()) },
-      { name: '3D/3dmodel.model', data: encodeText(modelXml) },
-      { name: 'Metadata/Slic3r_PE_model.config', data: encodeText(slicerModelConfigXml) },
-      { name: 'Metadata/Slic3r_PE.config', data: encodeText(slicerPrintConfig) },
-      { name: 'Metadata/project_settings.config', data: encodeText(projectSettingsJson) },
+      { name: '3D/3dmodel.model', data: encodeText(bambuProject.mainModelXml) },
+      { name: '3D/_rels/3dmodel.model.rels', data: encodeText(buildBambuModelRelsXml()) },
+      { name: '3D/Objects/object_1.model', data: encodeText(bambuProject.objectsModelXml) },
+      { name: 'Metadata/model_settings.config', data: encodeText(bambuProject.modelSettingsXml) },
+      { name: 'Metadata/project_settings.config', data: encodeText(bambuProject.projectSettingsJson) },
+      { name: 'Metadata/slice_info.config', data: encodeText(buildBambuSliceInfoXml()) },
+      { name: 'Metadata/cut_information.xml', data: encodeText(buildBambuCutInformationXml()) },
+      { name: 'Metadata/filament_sequence.json', data: encodeText(buildBambuFilamentSequenceJson()) },
       { name: '3D/Metadata/horama3d-metadata.json', data: encodeText(JSON.stringify(metadata, null, 2)) },
     ], 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml'),
     filename: getDefaultExportName(model, productType, '3mf'),
@@ -189,6 +200,8 @@ function geometryToMeshData(geometry: THREE.BufferGeometry): MeshData {
   const vertices: THREE.Vector3[] = [];
   const triangles: Array<[number, number, number]> = [];
   const vertexMap = new Map<string, number>();
+  const min = new THREE.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+  const max = new THREE.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
   let minZ = Number.POSITIVE_INFINITY;
   let maxZ = Number.NEGATIVE_INFINITY;
 
@@ -199,6 +212,8 @@ function geometryToMeshData(geometry: THREE.BufferGeometry): MeshData {
         position.getY(index + offset),
         position.getZ(index + offset),
       );
+      min.min(vertex);
+      max.max(vertex);
       minZ = Math.min(minZ, vertex.z);
       maxZ = Math.max(maxZ, vertex.z);
       const key = `${roundVertex(vertex.x)},${roundVertex(vertex.y)},${roundVertex(vertex.z)}`;
@@ -219,6 +234,8 @@ function geometryToMeshData(geometry: THREE.BufferGeometry): MeshData {
     vertices,
     triangles,
     bounds: {
+      min: vertices.length > 0 ? min : new THREE.Vector3(),
+      max: vertices.length > 0 ? max : new THREE.Vector3(),
       minZ: Number.isFinite(minZ) ? minZ : 0,
       maxZ: Number.isFinite(maxZ) ? maxZ : 0,
       centerZ: Number.isFinite(minZ) && Number.isFinite(maxZ) ? (minZ + maxZ) / 2 : 0,
@@ -226,61 +243,199 @@ function geometryToMeshData(geometry: THREE.BufferGeometry): MeshData {
   };
 }
 
-function build3mfModelXml(meshes: AssignedMesh[], materials: ExportMaterial[]): string {
-  const resourceXml = meshes
-    .map(({ part, material, mesh }, index) => {
-      const objectId = index + 1;
-      const materialIndex = getMaterialIndex(materials, material);
-      return `
-    <object id="${objectId}" type="model" name="${escapeXml(part.object ?? part.filename)}" pid="1" pindex="${materialIndex}">
+function buildBambu3mfProject(meshes: AssignedMesh[], title: string) {
+  const materials = getUniqueMaterials(meshes);
+  const prepared = prepareBambuMeshes(meshes, materials);
+  const assemblyMin = getAssemblyMin(meshes, getAssemblyCenter(meshes));
+  const buildTranslation = new THREE.Vector3(165, 160, -assemblyMin.z);
+
+  return {
+    mainModelXml: buildBambuMainModelXml(prepared, buildTranslation, title),
+    objectsModelXml: buildBambuObjectsModelXml(prepared),
+    modelSettingsXml: buildBambuModelSettingsXml(prepared, buildTranslation, title, materials.length),
+    projectSettingsJson: buildBambuProjectSettingsJson(materials),
+  };
+}
+
+function prepareBambuMeshes(meshes: AssignedMesh[], materials: ExportMaterial[]): PreparedBambuMesh[] {
+  const assemblyCenter = getAssemblyCenter(meshes);
+
+  return meshes.map((mesh) => {
+    const center = mesh.mesh.bounds.min.clone().add(mesh.mesh.bounds.max).multiplyScalar(0.5);
+    return {
+      ...mesh,
+      centeredVertices: mesh.mesh.vertices.map((vertex) => vertex.clone().sub(center)),
+      center,
+      componentTranslation: center.clone().sub(assemblyCenter),
+      extruder: getMaterialIndex(materials, mesh.material) + 1,
+    };
+  });
+}
+
+function getAssemblyCenter(meshes: AssignedMesh[]): THREE.Vector3 {
+  const min = getBoundsMin(meshes);
+  const max = getBoundsMax(meshes);
+  return min.add(max).multiplyScalar(0.5);
+}
+
+function getAssemblyMin(meshes: AssignedMesh[], assemblyCenter: THREE.Vector3): THREE.Vector3 {
+  return getBoundsMin(meshes).sub(assemblyCenter);
+}
+
+function getBoundsMin(meshes: AssignedMesh[]): THREE.Vector3 {
+  return meshes.reduce(
+    (min, { mesh }) => min.min(mesh.bounds.min),
+    new THREE.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY),
+  );
+}
+
+function getBoundsMax(meshes: AssignedMesh[]): THREE.Vector3 {
+  return meshes.reduce(
+    (max, { mesh }) => max.max(mesh.bounds.max),
+    new THREE.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY),
+  );
+}
+
+function buildBambuMainModelXml(
+  prepared: PreparedBambuMesh[],
+  buildTranslation: THREE.Vector3,
+  title: string,
+): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const componentsXml = prepared
+    .map((part, index) => `      <component p:path="/3D/Objects/object_1.model" objectid="${index + 1}" p:UUID="${uuidWithPrefix(`000100${formatPaddedIndex(index)}`)}" transform="${matrixText(part.componentTranslation)}" />`)
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" requiredextensions="p" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">
+  <metadata name="Application">BambuStudio-compatible Horama3D exporter</metadata>
+  <metadata name="BambuStudio:3mfVersion">1</metadata>
+  <metadata name="CreationDate">${today}</metadata>
+  <metadata name="ModificationDate">${today}</metadata>
+  <metadata name="Title">${escapeXml(title)}</metadata>
+  <resources>
+    <object id="4" p:UUID="${uuidWithPrefix('00000001')}" type="model">
+      <components>
+${componentsXml}
+      </components>
+    </object>
+  </resources>
+  <build p:UUID="${randomUuid()}">
+    <item objectid="4" p:UUID="${randomUuid()}" transform="${matrixText(buildTranslation)}" printable="1" />
+  </build>
+</model>`;
+}
+
+function buildBambuObjectsModelXml(prepared: PreparedBambuMesh[]): string {
+  const objectsXml = prepared
+    .map((part, index) => {
+      const verticesXml = part.centeredVertices
+        .map((vertex) => `          <vertex x="${formatNumber(vertex.x)}" y="${formatNumber(vertex.y)}" z="${formatNumber(vertex.z)}" />`)
+        .join('\n');
+      const trianglesXml = part.mesh.triangles
+        .map((triangle) => `          <triangle v1="${triangle[0]}" v2="${triangle[1]}" v3="${triangle[2]}" />`)
+        .join('\n');
+
+      return `    <object id="${index + 1}" p:UUID="${uuidWithPrefix(`000100${formatPaddedIndex(index)}`)}" type="model">
       <mesh>
         <vertices>
-${mesh.vertices.map((vertex) => `          <vertex x="${formatNumber(vertex.x)}" y="${formatNumber(vertex.y)}" z="${formatNumber(vertex.z)}" />`).join('\n')}
+${verticesXml}
         </vertices>
         <triangles>
-${mesh.triangles.map((triangle) => `          <triangle v1="${triangle[0]}" v2="${triangle[1]}" v3="${triangle[2]}" pid="1" p1="${materialIndex}" p2="${materialIndex}" p3="${materialIndex}" />`).join('\n')}
+${trianglesXml}
         </triangles>
       </mesh>
     </object>`;
     })
     .join('\n');
-  const materialXml = `
-    <basematerials id="1">
-${materials.map((material) => `      <base name="${escapeXml(material.name)}" displaycolor="${material.color}" />`).join('\n')}
-    </basematerials>`;
-
-  const buildXml = meshes
-    .map((_, index) => `    <item objectid="${index + 1}" />`)
-    .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-  <metadata name="Application">PrusaSlicer Horama3D</metadata>
-  <metadata name="slic3rpe:Version3mf">1</metadata>
-  <resources>${materialXml}${resourceXml}
+<model unit="millimeter" xml:lang="en-US" requiredextensions="p" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">
+  <metadata name="BambuStudio:3mfVersion">1</metadata>
+  <resources>
+${objectsXml}
   </resources>
-  <build>
-${buildXml}
-  </build>
 </model>`;
 }
 
-function buildContentTypesXml(): string {
+function buildBambuModelSettingsXml(
+  prepared: PreparedBambuMesh[],
+  buildTranslation: THREE.Vector3,
+  title: string,
+  materialCount: number,
+): string {
+  const totalFaces = prepared.reduce((count, part) => count + part.mesh.triangles.length, 0);
+  const partXml = prepared
+    .map((part, index) => {
+      const name = part.part.object ?? part.part.role ?? part.part.filename;
+      return `    <part id="${index + 1}" subtype="normal_part">
+      <metadata key="name" value="${escapeXml(name)}"/>
+      <metadata key="matrix" value="${matrixText(part.componentTranslation, true)}"/>
+      <metadata key="source_file" value="${escapeXml(title)}.3mf"/>
+      <metadata key="source_object_id" value="${index}"/>
+      <metadata key="source_volume_id" value="0"/>
+      <metadata key="source_offset_x" value="${formatNumber(part.center.x)}"/>
+      <metadata key="source_offset_y" value="${formatNumber(part.center.y)}"/>
+      <metadata key="source_offset_z" value="${formatNumber(part.center.z)}"/>
+      <metadata key="extruder" value="${part.extruder}"/>
+      <mesh_stat face_count="${part.mesh.triangles.length}" edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
+    </part>`;
+    })
+    .join('\n');
+  const assembleItemsXml = prepared
+    .map((part, index) => `   <assemble_item object_id="4" volume_id="${index}" transform="${matrixText(part.componentTranslation)}" />`)
+    .join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="4">
+    <metadata key="name" value="${escapeXml(title)}"/>
+    <metadata key="extruder" value="${prepared[0]?.extruder ?? 1}"/>
+    <metadata face_count="${totalFaces}"/>
+${partXml}
+  </object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <metadata key="plater_name" value=""/>
+    <metadata key="locked" value="false"/>
+    <metadata key="filament_map_mode" value="Auto For Flush"/>
+    <metadata key="filament_maps" value="${buildBambuFilamentMaps(materialCount)}"/>
+    <metadata key="filament_volume_maps" value="${Array.from({ length: materialCount }, () => '0').join(' ')}"/>
+    <model_instance>
+      <metadata key="object_id" value="4"/>
+      <metadata key="instance_id" value="0"/>
+      <metadata key="identify_id" value="1"/>
+    </model_instance>
+  </plate>
+  <assemble>
+   <assemble_item object_id="4" instance_id="0" transform="${matrixText(buildTranslation)}" offset="0 0 0" />
+${assembleItemsXml}
+  </assemble>
+</config>
+`;
+}
+
+function buildBambuContentTypesXml(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
-  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml" />
-  <Default Extension="json" ContentType="application/json" />
-  <Override PartName="/Metadata/Slic3r_PE_model.config" ContentType="text/xml" />
-  <Override PartName="/Metadata/Slic3r_PE.config" ContentType="text/plain" />
-  <Override PartName="/Metadata/project_settings.config" ContentType="application/json" />
+ <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+ <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+ <Default Extension="png" ContentType="image/png"/>
+ <Default Extension="gcode" ContentType="text/x.gcode"/>
 </Types>`;
 }
 
 function buildRelsXml(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" />
+ <Relationship Target="/3D/3dmodel.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
+</Relationships>`;
+}
+
+function buildBambuModelRelsXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+ <Relationship Target="/3D/Objects/object_1.model" Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>`;
 }
 
@@ -344,58 +499,99 @@ function getMaterialIndex(materials: ExportMaterial[], material: ExportMaterial)
   return Math.max(0, index);
 }
 
-function buildSlic3rModelConfigXml(meshes: AssignedMesh[], materials: ExportMaterial[]): string {
-  const objectXml = meshes
-    .map(({ part, material, mesh }, index) => {
-      const objectId = index + 1;
-      const extruder = getMaterialIndex(materials, material) + 1;
-      const name = part.object ?? part.filename;
-      return ` <object id="${objectId}" instances_count="1">
-  <metadata type="object" key="name" value="${escapeXml(name)}"/>
-  <metadata type="object" key="extruder" value="${extruder}"/>
-  <volume firstid="0" lastid="${Math.max(0, mesh.triangles.length - 1)}">
-   <metadata type="volume" key="name" value="${escapeXml(name)}"/>
-   <metadata type="volume" key="volume_type" value="ModelPart"/>
-   <metadata type="volume" key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>
-   <metadata type="volume" key="source_file" value="${escapeXml(part.filename)}"/>
-   <metadata type="volume" key="source_object_id" value="0"/>
-   <metadata type="volume" key="source_volume_id" value="0"/>
-   <metadata type="volume" key="source_offset_x" value="0"/>
-   <metadata type="volume" key="source_offset_y" value="0"/>
-   <metadata type="volume" key="source_offset_z" value="0"/>
-   <metadata type="volume" key="extruder" value="${extruder}"/>
-   <mesh edges_fixed="0" degenerate_facets="0" facets_removed="0" facets_reversed="0" backwards_edges="0"/>
-  </volume>
- </object>`;
-    })
-    .join('\n');
-
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<config>
-${objectXml}
-</config>`;
-}
-
-function buildSlic3rPrintConfig(materials: ExportMaterial[]): string {
-  const colors = materials.map((material) => material.color.slice(0, 7)).join(';');
-  const types = materials.map(() => 'PLA').join(';');
-  return `# generated by Horama3D
-filament_colour = ${colors}
-filament_type = ${types}
-extruders_count = ${materials.length}
-single_extruder_multi_material = 0
-`;
+function buildBambuFilamentMaps(materialCount: number): string {
+  return Array.from({ length: Math.max(1, materialCount) }, (_, index) => String(index + 1)).join(' ');
 }
 
 function buildBambuProjectSettingsJson(materials: ExportMaterial[]): string {
+  const materialColors = materials.map((material) => material.color.slice(0, 7));
+  const filamentColours = materialColors.length > 0 ? materialColors : ['#FFFFFF'];
+  const materialCount = filamentColours.length;
+  const repeated = (value: string) => Array.from({ length: materialCount }, () => value);
+  const filamentIndexes = Array.from({ length: materialCount }, (_, index) => String(index + 1));
+
   return JSON.stringify(
     {
-      filament_colour: materials.map((material) => material.color.slice(0, 7)),
-      filament_type: materials.map(() => 'PLA'),
+      bottom_color_penetration_layers: '3',
+      default_filament_colour: Array.from({ length: materialCount }, () => ''),
+      default_filament_profile: ['Bambu PLA Basic @BBL A1'],
+      enable_filament_dynamic_map: '0',
+      enable_mixed_color_sublayer: '0',
+      extruder_colour: filamentColours,
+      filament_colour: filamentColours,
+      filament_colour_type: repeated('0'),
+      filament_ids: repeated('GFA00'),
+      filament_is_support: repeated('0'),
+      filament_map: repeated('1'),
+      filament_map_mode: 'Auto For Flush',
+      filament_multi_colour: filamentColours,
+      filament_printable: repeated('3'),
+      filament_self_index: filamentIndexes,
+      filament_settings_id: repeated('Bambu PLA Basic @BBL A1'),
+      filament_type: repeated('PLA'),
+      filament_vendor: repeated('Bambu Lab'),
+      flush_multiplier: ['1'],
+      flush_volumes_matrix: buildFlushVolumesMatrix(materialCount),
+      flush_volumes_vector: Array.from({ length: materialCount * 2 }, () => '140'),
+      single_extruder_multi_material: materialCount > 1 ? '1' : '0',
+      top_color_penetration_layers: '5',
     },
     null,
-    2,
+    4,
   );
+}
+
+function buildFlushVolumesMatrix(materialCount: number): string[] {
+  const volumes: string[] = [];
+  for (let from = 0; from < materialCount; from += 1) {
+    for (let to = 0; to < materialCount; to += 1) {
+      volumes.push(from === to ? '0' : '280');
+    }
+  }
+  return volumes;
+}
+
+function buildBambuSliceInfoXml(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <header>
+    <header_item key="X-BBL-Client-Type" value="slicer"/>
+    <header_item key="X-BBL-Client-Version" value="Horama3D"/>
+  </header>
+</config>`;
+}
+
+function buildBambuCutInformationXml(): string {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<objects>
+ <object id="1">
+  <cut_id id="0" check_sum="1" connectors_cnt="0"/>
+ </object>
+</objects>`;
+}
+
+function buildBambuFilamentSequenceJson(): string {
+  return `${JSON.stringify({ plate_1: { nozzle_sequence: [], optimal_assignment: [], sequence: [] } })}\n`;
+}
+
+function matrixText(translation: THREE.Vector3, sixteen = false): string {
+  const { x, y, z } = translation;
+  const values = sixteen
+    ? [1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1]
+    : [1, 0, 0, 0, 1, 0, 0, 0, 1, x, y, z];
+  return values.map(formatNumber).join(' ');
+}
+
+function uuidWithPrefix(prefix: string): string {
+  return `${prefix}-${randomUuid().split('-').slice(1).join('-')}`;
+}
+
+function randomUuid(): string {
+  return crypto.randomUUID();
+}
+
+function formatPaddedIndex(index: number): string {
+  return index.toString().padStart(2, '0');
 }
 
 function getRoleSortOrder(role: string): number {
