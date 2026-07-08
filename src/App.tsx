@@ -77,6 +77,7 @@ export function App() {
     label: 'Checking STP',
   });
   const [hasUsedViewerActions, setHasUsedViewerActions] = useState(false);
+  const [shouldCollapseSetup, setShouldCollapseSetup] = useState(false);
   const [isCutPlaneDismissed, setIsCutPlaneDismissed] = useState(false);
   const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -199,6 +200,7 @@ export function App() {
       format: 'stl',
     });
     setIsModelValidated(true);
+    setShouldCollapseSetup(false);
     setIsCutPlaneDismissed(false);
     setStatus(nextStatus);
   };
@@ -209,6 +211,7 @@ export function App() {
     setActiveModel({ source: 'empty', format: 'stl' });
     setUploadedFile(null);
     setIsModelValidated(false);
+    setShouldCollapseSetup(false);
     setIsCutPlaneDismissed(false);
     setStatus(nextStatus);
     if (uploadInputRef.current) {
@@ -262,6 +265,7 @@ export function App() {
   const runGenerate = async () => {
     if (isLocked) return;
     setHasUsedViewerActions(true);
+    setShouldCollapseSetup(true);
     setIsCutPlaneDismissed(true);
     setIsGenerating(true);
     setStatus('Generating through STP pipeline...');
@@ -375,6 +379,7 @@ export function App() {
         format: 'stl',
       });
       setIsModelValidated(true);
+      setShouldCollapseSetup(false);
       setIsCutPlaneDismissed(false);
       setStatus(`Loaded ${file.name}`);
       showToast({
@@ -625,6 +630,7 @@ export function App() {
         modelMetadata={model?.metadata}
         paramOverrides={paramOverrides}
         showMaterialControls={model?.source === 'api'}
+        shouldCollapseSetup={shouldCollapseSetup}
         onChange={updateParam}
       />
 

@@ -38,35 +38,37 @@ VITE_STP_API_BASE_URL=http://localhost:8000 npm run dev
 4. Select a local `.stl` file.
 5. Orbit, zoom, and inspect the model in the preview area.
 
-## Current API Contract Draft
+## STP API Contract
 
-The API integration is not required for local STL inspection. When the STP API is available, the frontend expects:
+The API integration is not required for local STL inspection. When the STP API is available, the frontend calls the product transform endpoints with multipart form data:
 
 ```http
-POST /generate
-Content-Type: application/json
+POST /transforms/urns
+POST /transforms/clickers
+POST /transforms/generic
+Content-Type: multipart/form-data
 ```
 
-```json
+Responses may be direct binary STL/3MF/GLB data, or JSON pointing at an artifact stored by STP:
+
+```jsonc
 {
-  "productType": "urn",
-  "params": {
-    "heightMm": 180,
-    "diameterMm": 95
-  }
+  "success": true,
+  "artifact_id": "4f5a...",
+  "filename": "storage/artifacts/clicker_4f5a_model.stl",
+  "download_url": "/downloads/4f5a...",
+  "expires_at": "2026-07-15T12:00:00Z",
+  "preview_files": [
+    {
+      "role": "body",
+      "object": "bottom",
+      "filename": "storage/artifacts/clicker_4f5a_model_bottom.stl"
+    }
+  ],
+  "objects": ["bottom", "top"]
 }
 ```
 
-Response options:
+The frontend resolves relative STP URLs against `VITE_STP_API_BASE_URL`, prefers `download_url`/`artifact_id` for the primary model, and builds preview downloads from `preview_files[].url`, `preview_files[].download_url`, or `preview_files[].filename`.
 
-```json
-{ "modelUrl": "https://..." }
-```
-
-or:
-
-```json
-{ "downloadUrl": "https://..." }
-```
-
-or a direct binary response with STL/3MF/GLB data.
+Legacy `modelUrl`, `downloadUrl`, and `filename` responses are still accepted for compatibility.

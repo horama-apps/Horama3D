@@ -1,14 +1,17 @@
-import type { GeneratedModel, ProductParams, ProductType } from '../types';
+import type { GeneratedModel, PreviewFile, ProductParams, ProductType } from '../types';
 
 const apiBaseUrl = import.meta.env.VITE_STP_API_BASE_URL as string | undefined;
 const healthCheckPath = import.meta.env.VITE_STP_HEALTH_PATH as string | undefined;
 const healthCheckTimeoutMs = 5000;
 
 interface ApiGenerateResponse {
+  artifact_id?: string;
   modelUrl?: string;
   downloadUrl?: string;
+  download_url?: string;
   filename?: string;
   format?: GeneratedModel['format'];
+  output_format?: string;
   preview_files?: unknown;
   objects?: unknown;
   cut_height_mm?: unknown;
@@ -148,14 +151,15 @@ export async function generateModel(
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
     const payload = (await response.json()) as ApiGenerateResponse;
-    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
+    const downloadUrl = getPayloadDownloadUrl(payload);
+    const modelUrl = normalizeApiUrl(payload.modelUrl) ?? downloadUrl;
     return {
       source: 'api',
       name: getDownloadName(payload.filename),
-      modelUrl: payload.modelUrl ?? downloadUrl,
+      modelUrl,
       downloadUrl,
-      previewFiles: normalizePreviewFiles(payload.preview_files),
-      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      previewFiles: getPayloadPreviewFiles(payload),
+      format: getPayloadFormat(payload, modelUrl),
       metadata: {
         objects: normalizeStringList(payload.objects),
         warnings: normalizeMessageList(payload.warnings),
@@ -193,14 +197,15 @@ async function generateClickerModel(file: File, params: ProductParams): Promise<
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
     const payload = (await response.json()) as ApiGenerateResponse;
-    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
+    const downloadUrl = getPayloadDownloadUrl(payload);
+    const modelUrl = normalizeApiUrl(payload.modelUrl) ?? downloadUrl;
     return {
       source: 'api',
       name: getDownloadName(payload.filename),
-      modelUrl: payload.modelUrl ?? downloadUrl,
+      modelUrl,
       downloadUrl,
-      previewFiles: normalizePreviewFiles(payload.preview_files),
-      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      previewFiles: getPayloadPreviewFiles(payload),
+      format: getPayloadFormat(payload, modelUrl),
       metadata: {
         objects: normalizeStringList(payload.objects),
         clicker: {
@@ -243,16 +248,17 @@ async function generateUrnTransformModel(file: File, params: ProductParams): Pro
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
     const payload = (await response.json()) as ApiGenerateResponse;
-    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
-    const previewFiles = normalizePreviewFiles(payload.preview_files);
+    const downloadUrl = getPayloadDownloadUrl(payload);
+    const modelUrl = normalizeApiUrl(payload.modelUrl) ?? downloadUrl;
+    const previewFiles = getPayloadPreviewFiles(payload);
     const warnings = normalizeMessageList([payload.warnings, payload.urn?.warnings]);
     return {
       source: 'api',
       name: getDownloadName(payload.filename),
-      modelUrl: payload.modelUrl ?? downloadUrl,
+      modelUrl,
       downloadUrl,
       previewFiles,
-      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      format: getPayloadFormat(payload, modelUrl),
       metadata: {
         objects: normalizeStringList(payload.objects),
         urn: {
@@ -295,14 +301,15 @@ async function generateTextureModel(file: File, params: ProductParams): Promise<
   const contentType = response.headers.get('content-type') ?? '';
   if (contentType.includes('application/json')) {
     const payload = (await response.json()) as ApiGenerateResponse;
-    const downloadUrl = payload.downloadUrl ?? buildDownloadUrl(payload.filename);
+    const downloadUrl = getPayloadDownloadUrl(payload);
+    const modelUrl = normalizeApiUrl(payload.modelUrl) ?? downloadUrl;
     return {
       source: 'api',
       name: getDownloadName(payload.filename),
-      modelUrl: payload.modelUrl ?? downloadUrl,
+      modelUrl,
       downloadUrl,
-      previewFiles: normalizePreviewFiles(payload.preview_files),
-      format: payload.format ?? inferFormat(payload.modelUrl ?? downloadUrl ?? payload.filename),
+      previewFiles: getPayloadPreviewFiles(payload),
+      format: getPayloadFormat(payload, modelUrl),
       metadata: {
         objects: normalizeStringList(payload.objects),
         warnings: normalizeMessageList(payload.warnings),
@@ -369,7 +376,7 @@ function appendDefined(body: FormData, key: string, value: ProductParams[string]
 function buildDownloadUrl(filename?: string): string | undefined {
   if (!filename) return undefined;
   const cleanFilename = filename.split('/').pop();
-  return cleanFilename ? getApiUrl(`/download/${encodeURIComponent(cleanFilename)}`) : undefined;
+  return cleanFilename ? getApiUrl(`/downloads/${encodeURIComponent(cleanFilename)}`) : undefined;
 }
 
 function getDownloadName(filename?: string): string | undefined {
@@ -378,6 +385,49 @@ function getDownloadName(filename?: string): string | undefined {
 
 function getApiUrl(path: string): string {
   return apiBaseUrl ? `${apiBaseUrl.replace(/\/$/, '')}${path}` : path;
+}
+
+function getPayloadDownloadUrl(payload: ApiGenerateResponse): string | undefined {
+  return (
+    normalizeApiUrl(payload.downloadUrl) ??
+    normalizeApiUrl(payload.download_url) ??
+    buildArtifactDownloadUrl(payload.artifact_id) ??
+    buildDownloadUrl(payload.filename)
+  );
+}
+
+function buildArtifactDownloadUrl(artifactId?: string): string | undefined {
+  return artifactId ? getApiUrl(`/downloads/${encodeURIComponent(artifactId)}`) : undefined;
+}
+
+function buildArtifactObjectDownloadUrl(artifactId?: string, objectName?: string): string | undefined {
+  if (!artifactId || !objectName) return undefined;
+  return getApiUrl(`/downloads/${encodeURIComponent(artifactId)}/${encodeURIComponent(objectName)}`);
+}
+
+function normalizeApiUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value) || value.startsWith('blob:')) return value;
+  return getApiUrl(value.startsWith('/') ? value : `/${value}`);
+}
+
+function getPayloadFormat(
+  payload: ApiGenerateResponse,
+  fallbackUrl?: string,
+): GeneratedModel['format'] {
+  return (
+    normalizeFormat(payload.format) ??
+    normalizeFormat(payload.output_format) ??
+    inferFormat(fallbackUrl ?? payload.filename)
+  );
+}
+
+function normalizeFormat(value?: string): GeneratedModel['format'] | undefined {
+  const normalized = value?.toLowerCase().replace(/^[.]/, '').replace('-', '_');
+  if (normalized === '3mf') return '3mf';
+  if (normalized === 'glb') return 'glb';
+  if (normalized === 'stl' || normalized === 'stl_combined') return 'stl';
+  return undefined;
 }
 
 async function getApiErrorMessage(response: Response): Promise<string> {
@@ -427,19 +477,82 @@ function normalizeNumber(value: unknown): number | undefined {
   return undefined;
 }
 
-function normalizePreviewFiles(value: unknown): GeneratedModel['previewFiles'] {
+function getPayloadPreviewFiles(payload: ApiGenerateResponse): GeneratedModel['previewFiles'] {
+  return (
+    normalizePreviewFiles(payload.preview_files, payload.artifact_id) ??
+    normalizeObjectPreviewFiles(payload.objects, payload.artifact_id)
+  );
+}
+
+function normalizePreviewFiles(value: unknown, artifactId?: string): GeneratedModel['previewFiles'] {
   if (!Array.isArray(value)) return undefined;
 
-  const previewFiles = value.flatMap((item) => {
+  const previewFiles = value.flatMap((item): PreviewFile[] => {
     if (!item || typeof item !== 'object') return [];
-    const record = item as { role?: unknown; object?: unknown; filename?: unknown; url?: unknown };
-    const url = typeof record.url === 'string' ? record.url : buildDownloadUrl(normalizeFilename(record.filename));
+    const record = item as {
+      role?: unknown;
+      object?: unknown;
+      filename?: unknown;
+      url?: unknown;
+      download_url?: unknown;
+      downloadUrl?: unknown;
+    };
+    const objectName = normalizeObjectName(record.object);
+    const url =
+      normalizeApiUrl(normalizeFilename(record.url)) ??
+      normalizeApiUrl(normalizeFilename(record.downloadUrl)) ??
+      normalizeApiUrl(normalizeFilename(record.download_url)) ??
+      buildArtifactObjectDownloadUrl(artifactId, objectName) ??
+      buildDownloadUrl(normalizeFilename(record.filename));
     if (!url) return [];
 
     return [
       {
         role: typeof record.role === 'string' && record.role.trim() ? record.role : 'body',
-        object: typeof record.object === 'string' && record.object.trim() ? record.object : undefined,
+        object: objectName,
+        filename: normalizeFilename(record.filename),
+        url,
+        format: inferFormat(url),
+      },
+    ];
+  });
+
+  return previewFiles.length > 0 ? previewFiles : undefined;
+}
+
+function normalizeObjectPreviewFiles(value: unknown, artifactId?: string): GeneratedModel['previewFiles'] {
+  if (!Array.isArray(value)) return undefined;
+
+  const previewFiles = value.flatMap((item): PreviewFile[] => {
+    if (typeof item === 'string') {
+      const objectName = normalizeObjectName(item);
+      const url = buildArtifactObjectDownloadUrl(artifactId, objectName);
+      return url ? [{ role: getPreviewRoleForObject(objectName), object: objectName, url, format: 'stl' }] : [];
+    }
+
+    if (!item || typeof item !== 'object') return [];
+    const record = item as {
+      role?: unknown;
+      name?: unknown;
+      object?: unknown;
+      filename?: unknown;
+      url?: unknown;
+      download_url?: unknown;
+      downloadUrl?: unknown;
+    };
+    const objectName = normalizeObjectName(record.object) ?? normalizeObjectName(record.name);
+    const url =
+      normalizeApiUrl(normalizeFilename(record.url)) ??
+      normalizeApiUrl(normalizeFilename(record.downloadUrl)) ??
+      normalizeApiUrl(normalizeFilename(record.download_url)) ??
+      buildArtifactObjectDownloadUrl(artifactId, objectName) ??
+      buildDownloadUrl(normalizeFilename(record.filename));
+    if (!url) return [];
+
+    return [
+      {
+        role: typeof record.role === 'string' && record.role.trim() ? record.role : getPreviewRoleForObject(objectName),
+        object: objectName,
         filename: normalizeFilename(record.filename),
         url,
         format: inferFormat(url),
@@ -452,6 +565,16 @@ function normalizePreviewFiles(value: unknown): GeneratedModel['previewFiles'] {
 
 function normalizeFilename(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function normalizeObjectName(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function getPreviewRoleForObject(objectName?: string): string {
+  if (objectName === 'top' || objectName === 'lid') return 'lid';
+  if (objectName === 'text') return 'text';
+  return 'body';
 }
 
 function sleep(ms: number): Promise<void> {

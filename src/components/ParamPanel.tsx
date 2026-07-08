@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   GeneratedModel,
   ParamDefinition,
@@ -16,6 +16,7 @@ interface ParamPanelProps {
   modelMetadata?: GeneratedModel['metadata'];
   paramOverrides?: Record<string, Partial<Pick<NumberParamDefinition, 'min' | 'max' | 'step'>>>;
   showMaterialControls?: boolean;
+  shouldCollapseSetup?: boolean;
   onChange: (key: string, value: ProductParams[string]) => void;
 }
 
@@ -26,10 +27,11 @@ export function ParamPanel({
   modelMetadata,
   paramOverrides = {},
   showMaterialControls = false,
+  shouldCollapseSetup = false,
   onChange,
 }: ParamPanelProps) {
   const [openSections, setOpenSections] = useState({
-    parameters: false,
+    parameters: true,
     materials: false,
     transformInfo: false,
   });
@@ -70,7 +72,14 @@ export function ParamPanel({
     showMaterialControls &&
     (colorParams.length > 0 || visiblePostProcessingParams.length > 0);
   const hasVisibleColors = showMaterialControls && colorParams.length > 0;
-  const hasVisiblePostProcessing = visiblePostProcessingParams.length > 0;
+
+  useEffect(() => {
+    setOpenSections((current) => ({
+      ...current,
+      parameters: !shouldCollapseSetup,
+    }));
+  }, [shouldCollapseSetup]);
+
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((current) => ({
       ...current,
@@ -116,14 +125,8 @@ export function ParamPanel({
       {shouldShowPostProcessingSection && (
         <section className="color-section" aria-label="Model post processing">
           <CollapsibleHeading
-            eyebrow={hasVisibleColors ? 'Materials and keychain options' : 'Post processing'}
-            title={
-              hasVisibleColors && hasVisiblePostProcessing
-                ? 'Colors'
-                : hasVisiblePostProcessing
-                  ? 'Keychain'
-                  : 'Preview materials'
-            }
+            eyebrow="Customization"
+            title="Options"
             isOpen={openSections.materials}
             onToggle={() => toggleSection('materials')}
           />
