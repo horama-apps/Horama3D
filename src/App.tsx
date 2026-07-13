@@ -696,7 +696,7 @@ function roundToTenth(value: number): number {
 }
 
 function playDuckDownloadSound() {
-  const audio = new Audio('/sounds/duck-quack.mp3');
+  const audio = new Audio(`${import.meta.env.BASE_URL}sounds/duck-quack.mp3`);
   audio.volume = 0.55;
   void audio.play().catch(() => {
     // Browsers can block audio in some contexts; downloading should continue silently.
