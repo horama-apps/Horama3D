@@ -2,7 +2,7 @@ import type { GeneratedModel, PreviewFile, ProductParams, ProductType } from '..
 
 const apiBaseUrl = import.meta.env.VITE_STP_API_BASE_URL as string | undefined;
 const healthCheckPath = import.meta.env.VITE_STP_HEALTH_PATH as string | undefined;
-const healthCheckTimeoutMs = 5000;
+const healthCheckTimeoutMs = 30000;
 
 interface ApiGenerateResponse {
   artifact_id?: string;
