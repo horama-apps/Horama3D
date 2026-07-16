@@ -1,6 +1,6 @@
 # Font sources
 
-The TTF files in this folder come from the official [Google Fonts repository](https://github.com/google/fonts) and are distributed under the SIL Open Font License 1.1.
+The TTF files in this folder come from the official [Google Fonts repository](https://github.com/google/fonts). The license file for each family is stored beside its font file.
 
 - Roboto
 - Montserrat
@@ -12,3 +12,13 @@ The TTF files in this folder come from the official [Google Fonts repository](ht
 - Bebas Neue
 - Raleway
 - Merriweather
+- Lobster
+- Pacifico
+- Courgette
+- Kaushan Script
+- Satisfy
+- Bungee
+- Black Ops One
+- Alfa Slab One
+- Luckiest Guy
+- Righteous

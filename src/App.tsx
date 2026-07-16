@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   ChevronDown,
@@ -60,6 +61,7 @@ function isWipProductType(type: ProductType): boolean {
 }
 
 export function App() {
+  const { t, i18n } = useTranslation();
   const [configuratorMode, setConfiguratorMode] =
     useState<ConfiguratorMode>('stl');
   const [productType, setProductType] = useState<ProductType>('urn');
@@ -80,7 +82,7 @@ export function App() {
   });
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [status, setStatus] = useState(
-    'Load an STL to inspect it in the viewer',
+    t('status.loadStl'),
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -89,7 +91,7 @@ export function App() {
   const [isModelValidated, setIsModelValidated] = useState(false);
   const [stpStatus, setStpStatus] = useState<StpStatus>({
     tone: 'checking',
-    label: 'Checking STP',
+    label: t('status.checkingStp'),
   });
   const [hasUsedViewerActions, setHasUsedViewerActions] = useState(false);
   const [shouldCollapseSetup, setShouldCollapseSetup] = useState(false);
@@ -239,7 +241,7 @@ export function App() {
     setModel(nextModel);
   };
 
-  const restoreUploadedModel = (nextStatus = 'STL loaded') => {
+  const restoreUploadedModel = (nextStatus = t('status.stlReady')) => {
     if (!uploadedFile) return;
 
     const modelUrl = URL.createObjectURL(uploadedFile);
@@ -257,7 +259,7 @@ export function App() {
   };
 
   const returnToDefaultState = (
-    nextStatus = 'Load an STL to inspect it in the viewer',
+    nextStatus = t('status.loadStl'),
   ) => {
     setActiveModel({ source: 'empty', format: 'stl' });
     setUploadedFile(null);
@@ -282,7 +284,7 @@ export function App() {
         {
           tone: 'warning',
           placement: 'center',
-          title: 'Move the red circle indicators to choose each hole position.',
+          title: t('alerts.moveHoles'),
         },
         6200,
       );
@@ -302,14 +304,29 @@ export function App() {
     }));
     setStatus(
       model?.source === 'upload'
-        ? 'STL loaded. Parameters are ready for the STP API.'
-        : 'Parameters updated',
+        ? t('status.stlReady')
+        : t('status.parametersUpdated'),
     );
   };
 
   const handleModelBoundsChange = useCallback((bounds: ModelBounds | null) => {
     setModelBounds(bounds);
   }, []);
+
+  useEffect(() => {
+    if (isGenerating || isExporting) return;
+    if (model?.source === 'local') {
+      setStatus(t('status.generated'));
+    } else if (model?.source === 'upload') {
+      setStatus(t('status.stlReady'));
+    } else if (configuratorMode === 'stl') {
+      setStatus(t('status.loadStl'));
+    } else if (configuratorMode === 'create') {
+      setStatus(t('status.configureSign'));
+    } else {
+      setStatus(t('status.imageWip'));
+    }
+  }, [i18n.resolvedLanguage]);
 
   useEffect(() => {
     if (productType !== 'clicker' || model?.source !== 'upload' || !modelBounds)
@@ -343,8 +360,8 @@ export function App() {
     setIsGenerating(true);
     setStatus(
       productType === 'signs'
-        ? 'Generating sign locally...'
-        : 'Generating through STP pipeline...',
+        ? t('status.generatingSign')
+        : t('status.generatingStp'),
     );
     try {
       const generated =
@@ -368,7 +385,7 @@ export function App() {
           {
             tone: 'warning',
             placement: 'corner',
-            title: 'Transform warnings',
+            title: t('messages.transformWarnings'),
             messages: generated.metadata.warnings,
           },
           6200,
@@ -376,11 +393,11 @@ export function App() {
       }
       setStatus(
         generated.source === 'empty'
-          ? 'Add VITE_STP_API_BASE_URL to call STP, or load an STL manually.'
-          : 'Generated model loaded',
+          ? t('messages.missingApi')
+          : t('status.generated'),
       );
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Generation failed');
+      setStatus(error instanceof Error ? error.message : t('status.generationFailed'));
     } finally {
       setIsGenerating(false);
     }
@@ -395,17 +412,17 @@ export function App() {
       };
       setSignHolePositions(nextPositions);
       setIsGenerating(true);
-      setStatus('Updating mounting hole position...');
+      setStatus(t('status.movingHole'));
       try {
         const generated = await generateSignModel({
           ...params,
           mounting_hole_positions: JSON.stringify(nextPositions),
         });
         setActiveModel(generated);
-        setStatus('Mounting hole position updated');
+        setStatus(t('status.holeMoved'));
       } catch (error) {
         setStatus(
-          error instanceof Error ? error.message : 'Could not move the mounting hole',
+          error instanceof Error ? error.message : t('status.holeMoveFailed'),
         );
       } finally {
         setIsGenerating(false);
@@ -423,18 +440,18 @@ export function App() {
       setActiveModel({ source: 'empty', format: 'stl' });
       setStatus(
         nextType === 'signs'
-          ? 'Configure the sign and generate a preview.'
-          : 'This module is still in progress.',
+          ? t('status.configureSign')
+          : t('status.moduleWip'),
       );
       return;
     }
 
     if (uploadedFile) {
-      restoreUploadedModel('STL loaded');
+      restoreUploadedModel(t('status.stlReady'));
     } else {
       setActiveModel({ source: 'empty', format: 'stl' });
       setIsModelValidated(false);
-      setStatus('Load an STL to inspect it in the viewer');
+      setStatus(t('status.loadStl'));
     }
   };
 
@@ -448,7 +465,7 @@ export function App() {
     setSignHolePositions({});
 
     if (nextMode === 'stl' && uploadedFile) {
-      restoreUploadedModel('STL loaded');
+      restoreUploadedModel(t('status.stlReady'));
       return;
     }
 
@@ -457,10 +474,10 @@ export function App() {
     setModelBounds(null);
     setStatus(
       nextMode === 'stl'
-        ? 'Load an STL to inspect it in the viewer'
+        ? t('status.loadStl')
         : nextMode === 'create'
-          ? 'Configure the sign and generate a preview.'
-          : 'This image module is still in progress.',
+          ? t('status.configureSign')
+          : t('status.imageWip'),
     );
   };
 
@@ -473,18 +490,18 @@ export function App() {
     }));
 
     if (productType === 'clicker' && uploadedFile) {
-      restoreUploadedModel('STL loaded');
+      restoreUploadedModel(t('status.stlReady'));
       return;
     }
 
-    setStatus('Defaults restored');
+    setStatus(t('status.defaultsRestored'));
   };
 
   const loadStlFile = async (file: File | undefined) => {
     if (!file) return;
     const isStl = file.name.toLowerCase().endsWith('.stl');
     if (!isStl) {
-      setStatus('Please select an STL file.');
+      setStatus(t('upload.select'));
       if (uploadInputRef.current) {
         uploadInputRef.current.value = '';
       }
@@ -502,7 +519,7 @@ export function App() {
           {
             tone: 'warning',
             placement: 'corner',
-            title: 'Validation warnings',
+            title: t('messages.validationWarnings'),
             messages: analysis.warnings,
           },
           6200,
@@ -515,7 +532,7 @@ export function App() {
             {
               tone: 'issue',
               placement: 'top',
-              title: 'Validation issues',
+              title: t('messages.validationIssues'),
               messages: analysis.issues,
             },
             6200,
@@ -524,10 +541,10 @@ export function App() {
           showToast({
             tone: 'error',
             placement: 'center',
-            title: analysis.message ?? 'The STL model is not valid.',
+            title: analysis.message ?? t('messages.invalidStl'),
           });
         }
-        returnToDefaultState('Model rejected. Load a valid STL to continue.');
+        returnToDefaultState(t('messages.rejectedStl'));
         return;
       }
 
@@ -543,11 +560,11 @@ export function App() {
       setIsModelValidated(true);
       setShouldCollapseSetup(false);
       setIsCutPlaneDismissed(false);
-      setStatus(`Loaded ${file.name}`);
+      setStatus(t('status.loaded', { filename: file.name }));
       showToast({
         tone: 'success',
         placement: 'center',
-        title: 'The STL file can be loaded correctly.',
+        title: t('messages.validStl'),
       });
     } catch (error) {
       showToast({
@@ -556,9 +573,9 @@ export function App() {
         title:
           error instanceof Error
             ? error.message
-            : 'Could not validate the STL model.',
+            : t('messages.validateFailed'),
       });
-      returnToDefaultState('Could not validate the model. Try again.');
+      returnToDefaultState(t('messages.validateFailed'));
     } finally {
       setIsAnalyzing(false);
     }
@@ -573,10 +590,10 @@ export function App() {
     setIsExporting(true);
     setStatus(
       requestedFormat === '3mf'
-        ? 'Preparing 3MF with preview materials...'
+        ? t('status.preparing3mf')
         : productType === 'signs'
-          ? 'Preparing STL...'
-          : 'Preparing STL ZIP...',
+          ? t('status.preparingStl')
+          : t('status.preparingZip'),
     );
 
     try {
@@ -609,10 +626,10 @@ export function App() {
       link.remove();
       playDuckDownloadSound();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setStatus(`Downloaded ${exported.filename}`);
+      setStatus(t('status.downloaded', { filename: exported.filename }));
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Download failed';
+        error instanceof Error ? error.message : t('status.downloadFailed');
       setStatus(message);
       showToast({
         tone: 'error',
@@ -645,21 +662,21 @@ export function App() {
             <Box size={22} />
           </div>
           <div>
-            <h1>Horama Configurator</h1>
+            <h1>{t('brand.title')}</h1>
           </div>
         </div>
 
         <div className='configurator-selector'>
           <select
-            aria-label='Configurator type'
+            aria-label={t('configurator.label')}
             value={configuratorMode}
             onChange={(event) =>
               selectConfiguratorMode(event.target.value as ConfiguratorMode)
             }
           >
-            <option value='stl'>STL</option>
-            <option value='image'>IMG to STL</option>
-            <option value='create'>Create from Scratch</option>
+            <option value='stl'>{t('configurator.stl')}</option>
+            <option value='image'>{t('configurator.image')}</option>
+            <option value='create'>{t('configurator.create')}</option>
           </select>
         </div>
 
@@ -683,12 +700,12 @@ export function App() {
               ) : (
                 <FileUp size={18} />
               )}
-              {isAnalyzing ? 'Analyzing STL' : 'Load STL'}
+              {isAnalyzing ? t('upload.analyzing') : t('upload.load')}
             </button>
             <p>
               {uploadedFile
                 ? uploadedFile.name
-                : 'Select a local STL to preview.'}
+                : t('upload.select')}
             </p>
             </div>
           ) : null}
@@ -711,12 +728,12 @@ export function App() {
               onClick={() => selectProduct(item.type)}
             >
               <span className='product-button-title'>
-                {item.name}
+                {t(`products.${item.type}.name`, { defaultValue: item.name })}
                 {isWipProductType(item.type) ? (
-                  <span className='wip-badge'>WIP</span>
+                  <span className='wip-badge'>{t('common.wip')}</span>
                 ) : null}
               </span>
-              <small>{item.description}</small>
+              <small>{t(`products.${item.type}.description`, { defaultValue: item.description })}</small>
             </button>
           ))}
         </div>
@@ -725,26 +742,26 @@ export function App() {
           className={`stp-status stp-status-${configuratorMode === 'create' ? 'healthy' : configuratorMode === 'image' ? 'checking' : stpStatus.tone}`}
           title={
             configuratorMode === 'create'
-              ? 'Generated in this browser'
+              ? t('status.localGenerator')
               : configuratorMode === 'image'
-                ? 'Image workflow modules'
+                ? t('status.imageWorkflow')
                 : stpStatus.label
           }
           aria-label={
             configuratorMode === 'create'
-              ? 'Local generator ready'
+              ? t('status.localGenerator')
               : configuratorMode === 'image'
-                ? 'Image workflow'
-              : `STP API Status: ${stpStatus.label}`
+                ? t('status.imageWorkflow')
+              : `${t('status.stpApi')}: ${stpStatus.label}`
           }
         >
           <span aria-hidden='true' />
           <strong>
             {configuratorMode === 'create'
-              ? 'Local generator'
+              ? t('status.localGenerator')
               : configuratorMode === 'image'
-                ? 'Image workflow'
-                : 'STP API Status'}
+                ? t('status.imageWorkflow')
+                : t('status.stpApi')}
           </strong>
         </div>
       </aside>
@@ -756,7 +773,7 @@ export function App() {
               ? 'stage-toolbar stage-toolbar-expanded'
               : 'stage-toolbar'
           }
-          aria-label='Viewer actions'
+          aria-label={t('viewer.actions')}
         >
           <button
             className='primary-action'
@@ -768,24 +785,24 @@ export function App() {
             ) : (
               <Wand2 size={18} />
             )}
-            <span>Generate</span>
+            <span>{t('common.generate')}</span>
           </button>
           <button
             className='tool-action'
             disabled={isLocked}
             onClick={resetParams}
-            aria-label='Reset'
-            title='Reset'
+            aria-label={t('common.reset')}
+            title={t('common.reset')}
           >
             <RotateCcw size={17} />
-            <span>Reset</span>
+            <span>{t('common.reset')}</span>
           </button>
           {productType === 'signs' ? (
             <button
               className='tool-action'
               disabled={!canDownload || isExporting}
-              aria-label={`Download ${model?.name ?? 'sign.stl'}`}
-              title='Download STL'
+              aria-label={`${t('common.download')} ${model?.name ?? 'sign.stl'}`}
+              title={t('common.download')}
               onClick={() => void runDownload('stl')}
             >
               {isExporting ? (
@@ -793,17 +810,17 @@ export function App() {
               ) : (
                 <Download size={17} />
               )}
-              <span>Download</span>
+              <span>{t('common.download')}</span>
             </button>
           ) : (
             <div className='download-menu' ref={downloadMenuRef}>
               <button
                 className='tool-action download-menu-trigger'
                 disabled={!canDownload || isExporting}
-                aria-label={`Download ${getDefaultExportName(model, productType, downloadFormat)}`}
+                aria-label={`${t('common.download')} ${getDefaultExportName(model, productType, downloadFormat)}`}
                 aria-haspopup='menu'
                 aria-expanded={isDownloadMenuOpen}
-                title='Download'
+                title={t('common.download')}
                 onClick={() => setIsDownloadMenuOpen((isOpen) => !isOpen)}
               >
                 {isExporting ? (
@@ -811,7 +828,7 @@ export function App() {
                 ) : (
                   <Download size={17} />
                 )}
-                <span>Download</span>
+                <span>{t('common.download')}</span>
                 <ChevronDown className='download-menu-chevron' size={15} />
               </button>
               {isDownloadMenuOpen && canDownload && !isExporting ? (
@@ -849,14 +866,14 @@ export function App() {
         {isGenerating && (
           <div className='stage-loader' role='status' aria-live='polite'>
             <Loader2 className='spin' size={30} />
-            <span>Generating preview</span>
+            <span>{t('status.generatingPreview')}</span>
           </div>
         )}
         {isLocked && (
           <div className={isWipProduct ? 'stage-lock stage-lock-wip' : 'stage-lock'}>
             {isWipProduct
-              ? 'work in progress'
-              : 'Load a valid STL to unlock the 3D preview.'}
+              ? t('common.workInProgress')
+              : t('status.loadValidStl')}
           </div>
         )}
       </section>
@@ -869,6 +886,7 @@ export function App() {
         paramOverrides={paramOverrides}
         showMaterialControls={productType === 'signs' || model?.source === 'api'}
         shouldCollapseSetup={shouldCollapseSetup}
+        headerAction={<LanguageMenu />}
         onChange={updateParam}
       />
 
@@ -926,6 +944,67 @@ export function App() {
           ))}
       </div>
     </main>
+  );
+}
+
+function LanguageMenu() {
+  const { t, i18n } = useTranslation();
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const currentLanguage = (i18n.resolvedLanguage ?? 'es').split('-')[0];
+  const languages = [
+    { code: 'es', flag: '🇪🇸', label: t('language.es') },
+    { code: 'en', flag: '🇺🇸', label: t('language.en') },
+    { code: 'fr', flag: '🇫🇷', label: t('language.fr') },
+  ];
+  const current = languages.find((language) => language.code === currentLanguage) ?? languages[0];
+
+  useEffect(() => {
+    const closeMenu = (event: PointerEvent) => {
+      if (
+        detailsRef.current?.open &&
+        !detailsRef.current.contains(event.target as Node)
+      ) {
+        detailsRef.current.open = false;
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && detailsRef.current) {
+        detailsRef.current.open = false;
+      }
+    };
+    document.addEventListener('pointerdown', closeMenu);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeMenu);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, []);
+
+  return (
+    <details className='language-menu' ref={detailsRef}>
+      <summary aria-label={t('language.label')} title={t('language.label')}>
+        <span aria-hidden='true'>{current.flag}</span>
+      </summary>
+      <div className='language-menu-popover' role='menu'>
+        {languages.map((language) => (
+          <button
+            type='button'
+            role='menuitemradio'
+            aria-checked={language.code === currentLanguage}
+            className={language.code === currentLanguage ? 'active' : ''}
+            key={language.code}
+            onClick={() => {
+              window.localStorage.setItem('horama-language', language.code);
+              void i18n.changeLanguage(language.code);
+              if (detailsRef.current) detailsRef.current.open = false;
+            }}
+          >
+            <span aria-hidden='true'>{language.flag}</span>
+            <strong>{language.label}</strong>
+          </button>
+        ))}
+      </div>
+    </details>
   );
 }
 

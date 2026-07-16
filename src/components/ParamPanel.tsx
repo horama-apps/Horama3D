@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type {
   GeneratedModel,
   ParamDefinition,
@@ -17,6 +20,7 @@ interface ParamPanelProps {
   paramOverrides?: Record<string, Partial<Pick<NumberParamDefinition, 'min' | 'max' | 'step'>>>;
   showMaterialControls?: boolean;
   shouldCollapseSetup?: boolean;
+  headerAction?: ReactNode;
   onChange: (key: string, value: ProductParams[string]) => void;
 }
 
@@ -28,8 +32,13 @@ export function ParamPanel({
   paramOverrides = {},
   showMaterialControls = false,
   shouldCollapseSetup = false,
+  headerAction,
   onChange,
 }: ParamPanelProps) {
+  const { t } = useTranslation();
+  const productName = t(`products.${product.type}.name`, {
+    defaultValue: product.name,
+  });
   const [openSections, setOpenSections] = useState({
     parameters: true,
     materials: false,
@@ -38,9 +47,9 @@ export function ParamPanel({
   const urnInfo = product.type === 'urn' ? modelMetadata?.urn : undefined;
   const clickerInfo = product.type === 'clicker' ? modelMetadata?.clicker : undefined;
   const transformInfoRows = urnInfo
-    ? getUrnInfoRows(urnInfo)
+    ? getUrnInfoRows(urnInfo, t)
     : clickerInfo
-      ? getClickerInfoRows(clickerInfo)
+      ? getClickerInfoRows(clickerInfo, t)
       : [];
   const colorParams = product.params.filter((param) => param.kind === 'color');
   const postProcessingParams =
@@ -108,17 +117,20 @@ export function ParamPanel({
   return (
     <aside className={disabled ? 'panel panel-right panel-disabled' : 'panel panel-right'}>
       <div className="panel-heading">
-        <h2>{product.name}</h2>
+        <div className="panel-heading-row">
+          <h2>{productName}</h2>
+          {headerAction}
+        </div>
         {product.type === 'clicker' && (
           <p className="parameter-note">
-            After generating, use Reset to return to the original STL and show the Z cut plane again.
+            {t('notes.clickerReset')}
           </p>
         )}
       </div>
 
-      <section className="main-param-section" aria-label={`${product.name} parameters`}>
+      <section className="main-param-section" aria-label={`${productName} — ${t('common.setup')}`}>
         <CollapsibleHeading
-          label="Setup"
+          label={t('common.setup')}
           isOpen={openSections.parameters}
           onToggle={() => toggleSection('parameters')}
         />
@@ -139,9 +151,9 @@ export function ParamPanel({
       </section>
 
       {shouldShowPostProcessingSection && (
-        <section className="color-section" aria-label="Model post processing">
+        <section className="color-section" aria-label={t('common.finishing')}>
           <CollapsibleHeading
-            label={product.type === 'signs' ? 'Finishing' : 'Customization'}
+            label={product.type === 'signs' ? t('common.finishing') : t('common.customization')}
             isOpen={openSections.materials}
             onToggle={() => toggleSection('materials')}
           />
@@ -173,9 +185,9 @@ export function ParamPanel({
       )}
 
       {transformInfoRows.length > 0 && (
-        <section className="transform-info" aria-label={`${product.name} transform information`}>
+        <section className="transform-info" aria-label={`${productName} — ${t('common.transformInfo')}`}>
           <CollapsibleHeading
-            label="Transform info"
+            label={t('common.transformInfo')}
             isOpen={openSections.transformInfo}
             onToggle={() => toggleSection('transformInfo')}
           />
@@ -190,7 +202,7 @@ export function ParamPanel({
                 ))}
               </dl>
               {modelMetadata?.objects && modelMetadata.objects.length > 0 && (
-                <p className="object-list">Objects: {modelMetadata.objects.join(', ')}</p>
+                <p className="object-list">{t('common.objects')}: {modelMetadata.objects.join(', ')}</p>
               )}
             </>
           )}
@@ -211,18 +223,19 @@ function CollapsibleHeading({
   isOpen,
   onToggle,
 }: CollapsibleHeadingProps) {
+  const { t } = useTranslation();
   return (
     <button
       className="collapsible-heading"
       type="button"
       aria-expanded={isOpen}
-      aria-label={`${isOpen ? 'Hide' : 'Show'} ${label}`}
+      aria-label={`${isOpen ? t('common.hide') : t('common.show')} ${label}`}
       onClick={onToggle}
     >
       <span>
         <h3>{label}</h3>
       </span>
-      <strong>{isOpen ? 'Hide' : 'Show'}</strong>
+      <strong>{isOpen ? t('common.hide') : t('common.show')}</strong>
     </button>
   );
 }
@@ -236,12 +249,24 @@ interface ParamControlProps {
 }
 
 function ParamControl({ param, value, disabled, override, onChange }: ParamControlProps) {
+  const { t } = useTranslation();
+  const label = t(`params.${param.key}.label`, { defaultValue: param.label });
+  const help = param.help
+    ? t(`params.${param.key}.help`, { defaultValue: param.help })
+    : undefined;
+  const placeholder = param.kind === 'text'
+    ? t(param.key === 'text' ? 'placeholders.signText' : 'placeholders.lidText', {
+        defaultValue: param.placeholder,
+      })
+    : undefined;
+  const optionLabel = (option: { label: string; value: string }) =>
+    t(`options.${param.key}.${option.value}`, { defaultValue: option.label });
   if (param.kind === 'boolean') {
     return (
       <label className="toggle-row">
         <span>
-          {param.label}
-          {param.help && <small>{param.help}</small>}
+          {label}
+          {help && <small>{help}</small>}
         </span>
         <input
           type="checkbox"
@@ -257,7 +282,7 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
     if (param.key === 'font') {
       return (
         <FontDropdown
-          label={param.label}
+          label={label}
           options={param.options}
           value={String(value)}
           disabled={disabled}
@@ -268,7 +293,7 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
     if (param.options.some((option) => option.preview || option.fontFamily)) {
       return (
         <fieldset className="choice-field" disabled={disabled}>
-          <legend>{param.label}</legend>
+          <legend>{label}</legend>
           <div className={param.options.some((option) => option.preview) ? 'choice-grid texture-choice-grid' : 'choice-grid'}>
             {param.options.map((option) => (
               <label
@@ -283,12 +308,12 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
                   onChange={() => onChange(option.value)}
                 />
                 {option.preview && (
-                  <img src={option.preview} alt={option.previewAlt ?? `${option.label} texture`} />
+                  <img src={option.preview} alt={option.previewAlt ?? optionLabel(option)} />
                 )}
                 {option.fontFamily && (
                   <span className="font-sample" style={{ fontFamily: option.fontFamily }}>Aa</span>
                 )}
-                <span>{option.label}</span>
+                <span>{optionLabel(option)}</span>
               </label>
             ))}
           </div>
@@ -297,7 +322,7 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
     }
     return (
       <label className="field">
-        <span>{param.label}</span>
+        <span>{label}</span>
         <select
           value={String(value)}
           disabled={disabled}
@@ -305,7 +330,7 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
         >
           {param.options.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {optionLabel(option)}
             </option>
           ))}
         </select>
@@ -316,12 +341,12 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
   if (param.kind === 'text') {
     return (
       <label className="field">
-        <span>{param.label}</span>
+        <span>{label}</span>
         {param.multiline ? (
           <textarea
             value={String(value)}
             disabled={disabled}
-            placeholder={param.placeholder}
+            placeholder={placeholder}
             rows={3}
             onChange={(event) => onChange(event.target.value)}
           />
@@ -330,7 +355,7 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
             type="text"
             value={String(value)}
             disabled={disabled}
-            placeholder={param.placeholder}
+            placeholder={placeholder}
             onChange={(event) => onChange(event.target.value)}
           />
         )}
@@ -341,7 +366,7 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
   if (param.kind === 'color') {
     return (
       <label className="field color-field">
-        <span>{param.label}</span>
+        <span>{label}</span>
         <span className="color-control">
           <input
             type="color"
@@ -367,7 +392,7 @@ function ParamControl({ param, value, disabled, override, onChange }: ParamContr
   return (
     <label className="field">
       <span>
-        {param.label}
+        {label}
         <strong>
           {formatNumberValue(Number(value), step)}
           {param.unit ? ` ${param.unit}` : ''}
@@ -451,18 +476,18 @@ function formatNumberValue(value: number, step: number): string {
   return value.toFixed(decimals);
 }
 
-function getUrnInfoRows(info: UrnTransformInfo) {
+function getUrnInfoRows(info: UrnTransformInfo, t: TFunction) {
   return [
-    { label: 'Size', value: info.size?.toUpperCase() },
-    { label: 'Target capacity', value: formatInfoNumber(info.target_capacity_ml, 'ml') },
-    { label: 'Estimated capacity', value: formatInfoNumber(info.estimated_capacity_ml, 'ml') },
-    { label: 'Applied scale', value: formatInfoNumber(info.applied_scale) },
+    { label: t('info.size'), value: info.size?.toUpperCase() },
+    { label: t('info.targetCapacity'), value: formatInfoNumber(info.target_capacity_ml, 'ml') },
+    { label: t('info.estimatedCapacity'), value: formatInfoNumber(info.estimated_capacity_ml, 'ml') },
+    { label: t('info.appliedScale'), value: formatInfoNumber(info.applied_scale) },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 }
 
-function getClickerInfoRows(info: ClickerTransformInfo) {
+function getClickerInfoRows(info: ClickerTransformInfo, t: TFunction) {
   return [
-    { label: 'Cut height', value: formatInfoNumber(info.cut_height_mm, 'mm') },
+    { label: t('info.cutHeight'), value: formatInfoNumber(info.cut_height_mm, 'mm') },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 }
 

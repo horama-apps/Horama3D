@@ -18,6 +18,16 @@
 @font-face { font-family: "Horama Bebas Neue"; src: url("/fonts/bebas_neue_regular.ttf") format("truetype"); font-display: swap; }
 @font-face { font-family: "Horama Raleway"; src: url("/fonts/raleway_regular.ttf") format("truetype"); font-display: swap; }
 @font-face { font-family: "Horama Merriweather"; src: url("/fonts/merriweather_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Lobster"; src: url("/fonts/lobster_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Pacifico"; src: url("/fonts/pacifico_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Courgette"; src: url("/fonts/courgette_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Kaushan Script"; src: url("/fonts/kaushan_script_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Satisfy"; src: url("/fonts/satisfy_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Bungee"; src: url("/fonts/bungee_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Black Ops One"; src: url("/fonts/black_ops_one_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Alfa Slab One"; src: url("/fonts/alfa_slab_one_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Luckiest Guy"; src: url("/fonts/luckiest_guy_regular.ttf") format("truetype"); font-display: swap; }
+@font-face { font-family: "Horama Righteous"; src: url("/fonts/righteous_regular.ttf") format("truetype"); font-display: swap; }
 
 * {
   box-sizing: border-box;
@@ -705,6 +715,83 @@ a {
 
 .panel-heading {
   margin-bottom: 24px;
+}
+
+.panel-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.language-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.language-menu summary {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(32, 35, 38, 0.13);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 10px 28px rgba(35, 45, 42, 0.1);
+  font-size: 1.28rem;
+  list-style: none;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.language-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.language-menu summary:hover,
+.language-menu[open] summary {
+  border-color: color-mix(in srgb, var(--accent) 52%, #ffffff);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 14%, transparent);
+  transform: translateY(-1px);
+}
+
+.language-menu-popover {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 9px);
+  right: 0;
+  display: grid;
+  min-width: 168px;
+  padding: 6px;
+  border: 1px solid rgba(32, 35, 38, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 46px rgba(35, 45, 42, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.language-menu-popover button {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #252927;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.language-menu-popover button:hover,
+.language-menu-popover button.active {
+  background: color-mix(in srgb, var(--accent) 10%, #ffffff);
+}
+
+.language-menu-popover button > span {
+  font-size: 1.15rem;
 }
 
 .parameter-note {

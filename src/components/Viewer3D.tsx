@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
@@ -32,6 +33,7 @@ export function Viewer3D({
   onModelBoundsChange,
   onMountingHoleMove,
 }: Viewer3DProps) {
+  const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [liveBounds, setLiveBounds] = useState<ModelBounds | null>(null);
   const [isMountingSideView, setIsMountingSideView] = useState(false);
@@ -516,7 +518,7 @@ export function Viewer3D({
           className="mounting-view-toggle"
           onClick={() => setIsMountingSideView((current) => !current)}
         >
-          {isMountingSideView ? 'View front' : 'View mounting side'}
+          {isMountingSideView ? t('viewer.front') : t('viewer.mounting')}
         </button>
       )}
     </div>

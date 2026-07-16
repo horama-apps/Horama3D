@@ -29,6 +29,16 @@ const localTtfFonts = new Set([
   'bebas_neue_regular',
   'raleway_regular',
   'merriweather_regular',
+  'lobster_regular',
+  'pacifico_regular',
+  'courgette_regular',
+  'kaushan_script_regular',
+  'satisfy_regular',
+  'bungee_regular',
+  'black_ops_one_regular',
+  'alfa_slab_one_regular',
+  'luckiest_guy_regular',
+  'righteous_regular',
 ]);
 
 const fontCache = new Map<string, Promise<Font>>();
