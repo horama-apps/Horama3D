@@ -1,4 +1,10 @@
-export type ProductType = 'urn' | 'clicker' | 'textures' | 'keychains' | 'signs';
+export type ProductType =
+  | 'urn'
+  | 'clicker'
+  | 'textures'
+  | 'keychains'
+  | 'image_layers'
+  | 'signs';
 
 export type ParamKind = 'number' | 'boolean' | 'select' | 'text' | 'color';
 
@@ -25,7 +31,13 @@ export interface BooleanParamDefinition extends BaseParamDefinition {
 export interface SelectParamDefinition extends BaseParamDefinition {
   kind: 'select';
   defaultValue: string;
-  options: Array<{ label: string; value: string }>;
+  options: Array<{
+    label: string;
+    value: string;
+    preview?: string;
+    previewAlt?: string;
+    fontFamily?: string;
+  }>;
 }
 
 export interface TextParamDefinition extends BaseParamDefinition {
@@ -64,7 +76,7 @@ export interface ModelBounds {
 }
 
 export interface GeneratedModel {
-  source: 'empty' | 'api' | 'upload';
+  source: 'empty' | 'api' | 'upload' | 'local';
   name?: string;
   modelUrl?: string;
   downloadUrl?: string;
@@ -75,6 +87,19 @@ export interface GeneratedModel {
     objects?: string[];
     urn?: UrnTransformInfo;
     clicker?: ClickerTransformInfo;
+    mountingHoles?: Array<{
+      key: string;
+      x: number;
+      y: number;
+      radius: number;
+      depth: number;
+      bounds: {
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+      };
+    }>;
     warnings?: string[];
   };
 }

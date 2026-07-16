@@ -49,6 +49,10 @@ POST /transforms/generic
 Content-Type: multipart/form-data
 ```
 
+Signs are generated locally in the browser and never call the STP API. Font files
+can be added under `public/fonts`; use Three.js `*.typeface.json` files and add
+the filename without its extension to the signs font catalog.
+
 Responses may be direct binary STL/3MF/GLB data, or JSON pointing at an artifact stored by STP:
 
 ```jsonc

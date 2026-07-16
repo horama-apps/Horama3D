@@ -9,6 +9,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { analyzeModel, checkStpHealth, generateModel } from './api/stpApi';
+import { generateSignModel } from './generation/signGenerator';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
 import {
@@ -27,6 +28,7 @@ import type {
 type ToastTone = 'success' | 'warning' | 'error' | 'issue';
 type ToastPlacement = 'center' | 'corner' | 'top';
 type StpStatusTone = 'checking' | 'healthy' | 'unhealthy';
+type ConfiguratorMode = 'stl' | 'image' | 'create';
 
 interface Toast {
   id: number;
@@ -41,13 +43,25 @@ interface StpStatus {
   label: string;
 }
 
-const wipProductTypes: ProductType[] = ['keychains', 'signs'];
+const wipProductTypes: ProductType[] = ['keychains', 'image_layers'];
+const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
+  stl: ['urn', 'clicker', 'textures'],
+  image: ['keychains', 'image_layers'],
+  create: ['signs'],
+};
+const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
+  stl: 'urn',
+  image: 'keychains',
+  create: 'signs',
+};
 
 function isWipProductType(type: ProductType): boolean {
   return wipProductTypes.includes(type);
 }
 
 export function App() {
+  const [configuratorMode, setConfiguratorMode] =
+    useState<ConfiguratorMode>('stl');
   const [productType, setProductType] = useState<ProductType>('urn');
   const product = useMemo(() => getProduct(productType), [productType]);
   const [paramsByType, setParamsByType] = useState<
@@ -57,6 +71,7 @@ export function App() {
     clicker: getDefaultParams(getProduct('clicker')),
     textures: getDefaultParams(getProduct('textures')),
     keychains: getDefaultParams(getProduct('keychains')),
+    image_layers: getDefaultParams(getProduct('image_layers')),
     signs: getDefaultParams(getProduct('signs')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
@@ -87,28 +102,64 @@ export function App() {
   const toastIdRef = useRef(0);
   const toastTimeoutRefs = useRef<number[]>([]);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
+  const [signHolePositions, setSignHolePositions] = useState<
+    Record<string, { u: number; v: number }>
+  >({});
 
   const params = paramsByType[productType];
+  const visibleProducts = useMemo(
+    () =>
+      products.filter((item) =>
+        productsByConfigurator[configuratorMode].includes(item.type),
+      ),
+    [configuratorMode],
+  );
   const isWipProduct = isWipProductType(productType);
-  const isLocked = isWipProduct || !isModelValidated;
+  const requiresUploadedModel = productType !== 'signs';
+  const isLocked = isWipProduct || (requiresUploadedModel && !isModelValidated);
   const clickerCutHeightMin = modelBounds
     ? roundToTenth(modelBounds.height * 0.2)
     : 0;
   const clickerCutHeightMax = modelBounds
     ? roundToTenth(modelBounds.height * 0.8)
     : 1;
-  const paramOverrides = useMemo(
-    () =>
-      productType === 'clicker'
-        ? {
-            cut_height_mm: {
-              min: clickerCutHeightMin,
-              max: clickerCutHeightMax,
-              step: 0.1,
-            },
-          }
-        : undefined,
-    [clickerCutHeightMax, clickerCutHeightMin, productType],
+  const signMountingDepthMax = Math.min(
+    40,
+    Math.max(
+      1,
+      Math.floor(
+        (Number(params.base_thickness_mm ?? 2.4) +
+          Number(params.wall_height_mm ?? 20) -
+          1.2) *
+          2,
+      ) / 2,
+    ),
+  );
+  const paramOverrides = useMemo<
+    Record<string, { min?: number; max?: number; step?: number }> | undefined
+  >(
+    () => {
+      const overrides: Record<
+        string,
+        { min?: number; max?: number; step?: number }
+      > = {};
+      if (productType === 'clicker') {
+        overrides.cut_height_mm = {
+          min: clickerCutHeightMin,
+          max: clickerCutHeightMax,
+          step: 0.1,
+        };
+      }
+      if (productType === 'signs') {
+        overrides.mounting_hole_depth_mm = {
+          min: 1,
+          max: signMountingDepthMax,
+          step: 0.5,
+        };
+      }
+      return Object.keys(overrides).length > 0 ? overrides : undefined;
+    },
+    [clickerCutHeightMax, clickerCutHeightMin, productType, signMountingDepthMax],
   );
 
   useEffect(() => {
@@ -220,11 +271,33 @@ export function App() {
   };
 
   const updateParam = (key: string, value: ProductParams[string]) => {
+    if (
+      productType === 'signs' &&
+      ['text', 'font', 'font_size_mm'].includes(key)
+    ) {
+      setSignHolePositions({});
+    }
+    if (productType === 'signs' && key === 'mounting_holes' && value) {
+      showToast(
+        {
+          tone: 'warning',
+          placement: 'center',
+          title: 'Move the red circle indicators to choose each hole position.',
+        },
+        6200,
+      );
+    }
     setParamsByType((current) => ({
       ...current,
       [productType]: {
         ...current[productType],
         [key]: value,
+        ...(productType === 'signs' && key === 'hollow' && value
+          ? { mounting_holes: false }
+          : {}),
+        ...(productType === 'signs' && key === 'mounting_holes' && value
+          ? { hollow: false }
+          : {}),
       },
     }));
     setStatus(
@@ -268,13 +341,23 @@ export function App() {
     setShouldCollapseSetup(true);
     setIsCutPlaneDismissed(true);
     setIsGenerating(true);
-    setStatus('Generating through STP pipeline...');
+    setStatus(
+      productType === 'signs'
+        ? 'Generating sign locally...'
+        : 'Generating through STP pipeline...',
+    );
     try {
-      const generated = await generateModel(
-        productType,
-        params,
-        uploadedFile ?? undefined,
-      );
+      const generated =
+        productType === 'signs'
+          ? await generateSignModel({
+              ...params,
+              mounting_hole_positions: JSON.stringify(signHolePositions),
+            })
+          : await generateModel(
+              productType,
+              params,
+              uploadedFile ?? undefined,
+            );
       setActiveModel(generated);
       setIsModelValidated(generated.source !== 'empty');
       if (
@@ -303,8 +386,87 @@ export function App() {
     }
   };
 
+  const handleMountingHoleMove = useCallback(
+    async (key: string, u: number, v: number) => {
+      if (productType !== 'signs' || !params.mounting_holes) return;
+      const nextPositions = {
+        ...signHolePositions,
+        [key]: { u, v },
+      };
+      setSignHolePositions(nextPositions);
+      setIsGenerating(true);
+      setStatus('Updating mounting hole position...');
+      try {
+        const generated = await generateSignModel({
+          ...params,
+          mounting_hole_positions: JSON.stringify(nextPositions),
+        });
+        setActiveModel(generated);
+        setStatus('Mounting hole position updated');
+      } catch (error) {
+        setStatus(
+          error instanceof Error ? error.message : 'Could not move the mounting hole',
+        );
+      } finally {
+        setIsGenerating(false);
+      }
+    },
+    [params, productType, signHolePositions],
+  );
+
+  const selectProduct = (nextType: ProductType) => {
+    setProductType(nextType);
+    setShouldCollapseSetup(false);
+    setIsCutPlaneDismissed(false);
+
+    if (nextType === 'signs' || isWipProductType(nextType)) {
+      setActiveModel({ source: 'empty', format: 'stl' });
+      setStatus(
+        nextType === 'signs'
+          ? 'Configure the sign and generate a preview.'
+          : 'This module is still in progress.',
+      );
+      return;
+    }
+
+    if (uploadedFile) {
+      restoreUploadedModel('STL loaded');
+    } else {
+      setActiveModel({ source: 'empty', format: 'stl' });
+      setIsModelValidated(false);
+      setStatus('Load an STL to inspect it in the viewer');
+    }
+  };
+
+  const selectConfiguratorMode = (nextMode: ConfiguratorMode) => {
+    const nextProduct = defaultProductByConfigurator[nextMode];
+    setConfiguratorMode(nextMode);
+    setProductType(nextProduct);
+    setShouldCollapseSetup(false);
+    setIsCutPlaneDismissed(false);
+    setHasUsedViewerActions(false);
+    setSignHolePositions({});
+
+    if (nextMode === 'stl' && uploadedFile) {
+      restoreUploadedModel('STL loaded');
+      return;
+    }
+
+    setActiveModel({ source: 'empty', format: 'stl' });
+    setIsModelValidated(false);
+    setModelBounds(null);
+    setStatus(
+      nextMode === 'stl'
+        ? 'Load an STL to inspect it in the viewer'
+        : nextMode === 'create'
+          ? 'Configure the sign and generate a preview.'
+          : 'This image module is still in progress.',
+    );
+  };
+
   const resetParams = () => {
     setHasUsedViewerActions(true);
+    if (productType === 'signs') setSignHolePositions({});
     setParamsByType((current) => ({
       ...current,
       [productType]: getDefaultParams(product),
@@ -405,22 +567,39 @@ export function App() {
   const runDownload = async (format = downloadFormat) => {
     if (!model || model.source === 'empty' || isExporting) return;
 
-    setDownloadFormat(format);
+    const requestedFormat = productType === 'signs' ? 'stl' : format;
+    setDownloadFormat(requestedFormat);
     setHasUsedViewerActions(true);
     setIsExporting(true);
     setStatus(
-      format === '3mf'
+      requestedFormat === '3mf'
         ? 'Preparing 3MF with preview materials...'
-        : 'Preparing STL ZIP...',
+        : productType === 'signs'
+          ? 'Preparing STL...'
+          : 'Preparing STL ZIP...',
     );
 
     try {
-      const exported = await exportModel(
-        model,
-        productType,
-        params,
-        format,
-      );
+      let exported: { blob: Blob; filename: string };
+      if (productType === 'signs') {
+        let signBlob = model.blob;
+        if (!signBlob) {
+          const response = await fetch(model.downloadUrl ?? model.modelUrl ?? '');
+          if (!response.ok) throw new Error('Could not prepare the sign STL.');
+          signBlob = await response.blob();
+        }
+        exported = {
+          blob: signBlob,
+          filename: model.name ?? 'sign.stl',
+        };
+      } else {
+        exported = await exportModel(
+          model,
+          productType,
+          params,
+          requestedFormat,
+        );
+      }
       const url = URL.createObjectURL(exported.blob);
       const link = document.createElement('a');
       link.href = url;
@@ -445,7 +624,13 @@ export function App() {
     }
   };
 
-  const canDownload = !isWipProduct && Boolean(model && model.source !== 'empty');
+  const canDownload =
+    !isWipProduct &&
+    Boolean(
+      model &&
+      model.source !== 'empty' &&
+      (productType !== 'signs' || model.source === 'local'),
+    );
   const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
   const downloadFormats: DownloadFormat[] = ['stl', '3mf'];
 
@@ -460,13 +645,27 @@ export function App() {
             <Box size={22} />
           </div>
           <div>
-            <p>Horama3D</p>
-            <h1>STL Configurator</h1>
+            <h1>Horama Configurator</h1>
           </div>
         </div>
 
+        <div className='configurator-selector'>
+          <select
+            aria-label='Configurator type'
+            value={configuratorMode}
+            onChange={(event) =>
+              selectConfiguratorMode(event.target.value as ConfiguratorMode)
+            }
+          >
+            <option value='stl'>STL</option>
+            <option value='image'>IMG to STL</option>
+            <option value='create'>Create from Scratch</option>
+          </select>
+        </div>
+
         <div className='product-list'>
-          <div className='upload-card'>
+          {configuratorMode === 'stl' ? (
+            <div className='upload-card'>
             <input
               ref={uploadInputRef}
               className='file-input'
@@ -491,9 +690,10 @@ export function App() {
                 ? uploadedFile.name
                 : 'Select a local STL to preview.'}
             </p>
-          </div>
+            </div>
+          ) : null}
 
-          {products.map((item) => (
+          {visibleProducts.map((item) => (
             <button
               className={
                 item.type === productType
@@ -502,11 +702,13 @@ export function App() {
               }
               key={item.type}
               style={{ '--product-accent': item.accent } as React.CSSProperties}
-              disabled={isLocked && !isWipProductType(item.type) && !isWipProduct}
-              onClick={() => {
-                setProductType(item.type);
-                restoreUploadedModel('STL loaded');
-              }}
+              disabled={
+                isLocked &&
+                item.type !== 'signs' &&
+                !isWipProductType(item.type) &&
+                !isWipProduct
+              }
+              onClick={() => selectProduct(item.type)}
             >
               <span className='product-button-title'>
                 {item.name}
@@ -520,12 +722,30 @@ export function App() {
         </div>
 
         <div
-          className={`stp-status stp-status-${stpStatus.tone}`}
-          title={stpStatus.label}
-          aria-label={`STP API Status: ${stpStatus.label}`}
+          className={`stp-status stp-status-${configuratorMode === 'create' ? 'healthy' : configuratorMode === 'image' ? 'checking' : stpStatus.tone}`}
+          title={
+            configuratorMode === 'create'
+              ? 'Generated in this browser'
+              : configuratorMode === 'image'
+                ? 'Image workflow modules'
+                : stpStatus.label
+          }
+          aria-label={
+            configuratorMode === 'create'
+              ? 'Local generator ready'
+              : configuratorMode === 'image'
+                ? 'Image workflow'
+              : `STP API Status: ${stpStatus.label}`
+          }
         >
           <span aria-hidden='true' />
-          <strong>STP API Status</strong>
+          <strong>
+            {configuratorMode === 'create'
+              ? 'Local generator'
+              : configuratorMode === 'image'
+                ? 'Image workflow'
+                : 'STP API Status'}
+          </strong>
         </div>
       </aside>
 
@@ -560,15 +780,13 @@ export function App() {
             <RotateCcw size={17} />
             <span>Reset</span>
           </button>
-          <div className='download-menu' ref={downloadMenuRef}>
+          {productType === 'signs' ? (
             <button
-              className='tool-action download-menu-trigger'
+              className='tool-action'
               disabled={!canDownload || isExporting}
-              aria-label={`Download ${getDefaultExportName(model, productType, downloadFormat)}`}
-              aria-haspopup='menu'
-              aria-expanded={isDownloadMenuOpen}
-              title='Download'
-              onClick={() => setIsDownloadMenuOpen((isOpen) => !isOpen)}
+              aria-label={`Download ${model?.name ?? 'sign.stl'}`}
+              title='Download STL'
+              onClick={() => void runDownload('stl')}
             >
               {isExporting ? (
                 <Loader2 className='spin' size={17} />
@@ -576,27 +794,46 @@ export function App() {
                 <Download size={17} />
               )}
               <span>Download</span>
-              <ChevronDown className='download-menu-chevron' size={15} />
             </button>
-            {isDownloadMenuOpen && canDownload && !isExporting ? (
-              <div className='download-menu-list' role='menu'>
-                {downloadFormats.map((format) => (
-                  <button
-                    key={format}
-                    className='download-menu-item'
-                    type='button'
-                    role='menuitem'
-                    onClick={() => {
-                      setIsDownloadMenuOpen(false);
-                      void runDownload(format);
-                    }}
-                  >
-                    {format.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          ) : (
+            <div className='download-menu' ref={downloadMenuRef}>
+              <button
+                className='tool-action download-menu-trigger'
+                disabled={!canDownload || isExporting}
+                aria-label={`Download ${getDefaultExportName(model, productType, downloadFormat)}`}
+                aria-haspopup='menu'
+                aria-expanded={isDownloadMenuOpen}
+                title='Download'
+                onClick={() => setIsDownloadMenuOpen((isOpen) => !isOpen)}
+              >
+                {isExporting ? (
+                  <Loader2 className='spin' size={17} />
+                ) : (
+                  <Download size={17} />
+                )}
+                <span>Download</span>
+                <ChevronDown className='download-menu-chevron' size={15} />
+              </button>
+              {isDownloadMenuOpen && canDownload && !isExporting ? (
+                <div className='download-menu-list' role='menu'>
+                  {downloadFormats.map((format) => (
+                    <button
+                      key={format}
+                      className='download-menu-item'
+                      type='button'
+                      role='menuitem'
+                      onClick={() => {
+                        setIsDownloadMenuOpen(false);
+                        void runDownload(format);
+                      }}
+                    >
+                      {format.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
         <Viewer3D
           productType={productType}
@@ -604,6 +841,7 @@ export function App() {
           model={isWipProduct ? { source: 'empty', format: 'stl' } : model}
           showCutPlane={!isGenerating && !isCutPlaneDismissed}
           onModelBoundsChange={handleModelBoundsChange}
+          onMountingHoleMove={handleMountingHoleMove}
         />
         <div className='stage-statusbar' aria-live='polite'>
           <span>{status}</span>
@@ -629,7 +867,7 @@ export function App() {
         disabled={isLocked}
         modelMetadata={model?.metadata}
         paramOverrides={paramOverrides}
-        showMaterialControls={model?.source === 'api'}
+        showMaterialControls={productType === 'signs' || model?.source === 'api'}
         shouldCollapseSetup={shouldCollapseSetup}
         onChange={updateParam}
       />

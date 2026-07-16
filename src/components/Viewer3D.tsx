@@ -21,6 +21,7 @@ interface Viewer3DProps {
   model: GeneratedModel | null;
   showCutPlane?: boolean;
   onModelBoundsChange?: (bounds: ModelBounds | null) => void;
+  onMountingHoleMove?: (key: string, u: number, v: number) => void;
 }
 
 export function Viewer3D({
@@ -29,9 +30,13 @@ export function Viewer3D({
   model,
   showCutPlane = false,
   onModelBoundsChange,
+  onMountingHoleMove,
 }: Viewer3DProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [liveBounds, setLiveBounds] = useState<ModelBounds | null>(null);
+  const [isMountingSideView, setIsMountingSideView] = useState(false);
+  const onMountingHoleMoveRef = useRef(onMountingHoleMove);
+  onMountingHoleMoveRef.current = onMountingHoleMove;
   const materialKey =
     productType === 'urn'
       ? `${params.body_color}|${params.lid_color}|${params.text_color}`
@@ -46,6 +51,9 @@ export function Viewer3D({
     modelRoot: THREE.Group;
     cutPlaneRoot: THREE.Group;
     keychainHoleRoot: THREE.Group;
+    mountingHolePreviewRoot: THREE.Group;
+    resizeGrid: (bounds: ModelBounds | null) => void;
+    setCameraSide: (mountingSide: boolean, bounds: ModelBounds | null) => void;
     frameModel: () => ModelBounds | null;
     cleanup: () => void;
   } | null>(null);
@@ -82,7 +90,15 @@ export function Viewer3D({
 
     const grid = new THREE.GridHelper(360, 36, 0x2f8f83, 0xd8d3c8);
     grid.rotation.x = Math.PI / 2;
+    grid.position.z = -0.6;
     scene.add(grid);
+
+    const resizeGrid = (bounds: ModelBounds | null) => {
+      const requiredSize = bounds
+        ? Math.max(360, Math.ceil(Math.max(bounds.width, bounds.depth) * 1.35 / 20) * 20)
+        : 360;
+      grid.scale.setScalar(requiredSize / 360);
+    };
 
     const modelRoot = new THREE.Group();
     scene.add(modelRoot);
@@ -93,10 +109,136 @@ export function Viewer3D({
     const keychainHoleRoot = new THREE.Group();
     scene.add(keychainHoleRoot);
 
+    const mountingHolePreviewRoot = new THREE.Group();
+    scene.add(mountingHolePreviewRoot);
+
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.target.set(0, 0, 55);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const dragPlane = new THREE.Plane();
+    const dragPoint = new THREE.Vector3();
+    let draggedMarker: THREE.Mesh | null = null;
+    let draggedPointerId: number | null = null;
+
+    const updatePointer = (event: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.set(
+        ((event.clientX - rect.left) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      raycaster.setFromCamera(pointer, camera);
+    };
+
+    const getMarkerAtPointer = (event: PointerEvent) => {
+      updatePointer(event);
+      return raycaster.intersectObjects(mountingHolePreviewRoot.children, false)[0]
+        ?.object as THREE.Mesh | undefined;
+    };
+
+    const onMarkerPointerDown = (event: PointerEvent) => {
+      const marker = getMarkerAtPointer(event);
+      if (!marker?.userData.mountingHoleKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      draggedMarker = marker;
+      draggedPointerId = event.pointerId;
+      controls.enabled = false;
+      dragPlane.setFromNormalAndCoplanarPoint(
+        new THREE.Vector3(0, 0, 1),
+        marker.position,
+      );
+      renderer.domElement.setPointerCapture(event.pointerId);
+      renderer.domElement.style.cursor = 'grabbing';
+    };
+
+    const onMarkerPointerMove = (event: PointerEvent) => {
+      if (!draggedMarker) {
+        renderer.domElement.style.cursor = getMarkerAtPointer(event) ? 'grab' : '';
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      updatePointer(event);
+      if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return;
+      const bounds = draggedMarker.userData.mountingHoleBounds as {
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+      };
+      draggedMarker.position.x = THREE.MathUtils.clamp(
+        dragPoint.x,
+        bounds.minX + modelRoot.position.x,
+        bounds.maxX + modelRoot.position.x,
+      );
+      draggedMarker.position.y = THREE.MathUtils.clamp(
+        dragPoint.y,
+        bounds.minY + modelRoot.position.y,
+        bounds.maxY + modelRoot.position.y,
+      );
+    };
+
+    const finishMarkerDrag = (event: PointerEvent) => {
+      if (!draggedMarker) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const marker = draggedMarker;
+      const bounds = marker.userData.mountingHoleBounds as {
+        minX: number;
+        maxX: number;
+        minY: number;
+        maxY: number;
+      };
+      const localX = marker.position.x - modelRoot.position.x;
+      const localY = marker.position.y - modelRoot.position.y;
+      const u = THREE.MathUtils.clamp(
+        (localX - bounds.minX) / Math.max(bounds.maxX - bounds.minX, 0.001),
+        0,
+        1,
+      );
+      const v = THREE.MathUtils.clamp(
+        (localY - bounds.minY) / Math.max(bounds.maxY - bounds.minY, 0.001),
+        0,
+        1,
+      );
+      draggedMarker = null;
+      controls.enabled = true;
+      renderer.domElement.style.cursor = '';
+      if (
+        draggedPointerId !== null &&
+        renderer.domElement.hasPointerCapture(draggedPointerId)
+      ) {
+        renderer.domElement.releasePointerCapture(draggedPointerId);
+      }
+      draggedPointerId = null;
+      onMountingHoleMoveRef.current?.(
+        String(marker.userData.mountingHoleKey),
+        u,
+        v,
+      );
+    };
+
+    renderer.domElement.addEventListener('pointerdown', onMarkerPointerDown, true);
+    renderer.domElement.addEventListener('pointermove', onMarkerPointerMove, true);
+    renderer.domElement.addEventListener('pointerup', finishMarkerDrag, true);
+    renderer.domElement.addEventListener('pointercancel', finishMarkerDrag, true);
+
+    const setCameraSide = (mountingSide: boolean, bounds: ModelBounds | null) => {
+      grid.visible = !mountingSide;
+      if (!bounds) return;
+      const radius = Math.max(bounds.width, bounds.depth, bounds.height) * 1.75 + 35;
+      camera.position.set(
+        mountingSide ? radius * 0.12 : radius,
+        mountingSide ? -radius * 0.18 : -radius * 1.08,
+        radius * (mountingSide ? -0.96 : 0.72),
+      );
+      controls.target.set(0, 0, bounds.height / 2);
+      controls.update();
+    };
 
     const frameModel = () => {
       const box = new THREE.Box3().setFromObject(modelRoot);
@@ -108,11 +250,13 @@ export function Viewer3D({
       camera.position.set(radius, -radius * 1.08, radius * 0.72);
       controls.target.set(0, 0, size.z / 2);
       controls.update();
-      return {
+      const bounds = {
         width: size.x,
         depth: size.y,
         height: size.z,
       };
+      resizeGrid(bounds);
+      return bounds;
     };
 
     const onResize = () => {
@@ -140,13 +284,21 @@ export function Viewer3D({
       modelRoot,
       cutPlaneRoot,
       keychainHoleRoot,
+      mountingHolePreviewRoot,
+      resizeGrid,
+      setCameraSide,
       frameModel,
       cleanup: () => {
         cancelAnimationFrame(raf);
         window.removeEventListener('resize', onResize);
+        renderer.domElement.removeEventListener('pointerdown', onMarkerPointerDown, true);
+        renderer.domElement.removeEventListener('pointermove', onMarkerPointerMove, true);
+        renderer.domElement.removeEventListener('pointerup', finishMarkerDrag, true);
+        renderer.domElement.removeEventListener('pointercancel', finishMarkerDrag, true);
         clearGroup(modelRoot);
         clearGroup(cutPlaneRoot);
         clearGroup(keychainHoleRoot);
+        clearGroup(mountingHolePreviewRoot);
         controls.dispose();
         pmrem.dispose();
         renderer.dispose();
@@ -158,6 +310,60 @@ export function Viewer3D({
   }, []);
 
   useEffect(() => {
+    const shouldShowMountingSide =
+      productType === 'signs' &&
+      model?.source === 'local' &&
+      Boolean(params.mounting_holes);
+    setIsMountingSideView(shouldShowMountingSide);
+  }, [model, params.mounting_holes, productType]);
+
+  useEffect(() => {
+    sceneRef.current?.setCameraSide(isMountingSideView, liveBounds);
+  }, [isMountingSideView, liveBounds]);
+
+  useEffect(() => {
+    const context = sceneRef.current;
+    if (!context) return;
+    clearGroup(context.mountingHolePreviewRoot);
+    if (!isMountingSideView || !model?.metadata?.mountingHoles) return;
+
+    model.metadata.mountingHoles.forEach((hole) => {
+      const marker = new THREE.Mesh(
+        new THREE.CircleGeometry(hole.radius * 1.42, 36),
+        new THREE.MeshBasicMaterial({
+          color: 0xd94c43,
+          opacity: 0.2,
+          transparent: true,
+          depthTest: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(hole.radius * 0.72, hole.radius * 1.08, 36),
+        new THREE.MeshBasicMaterial({
+          color: 0xd94c43,
+          opacity: 0.95,
+          transparent: true,
+          depthTest: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      ring.position.z = -0.01;
+      ring.renderOrder = 21;
+      marker.add(ring);
+      marker.position.set(
+        hole.x + context.modelRoot.position.x,
+        hole.y + context.modelRoot.position.y,
+        context.modelRoot.position.z - 0.08,
+      );
+      marker.userData.mountingHoleKey = hole.key;
+      marker.userData.mountingHoleBounds = hole.bounds;
+      marker.renderOrder = 20;
+      context.mountingHolePreviewRoot.add(marker);
+    });
+  }, [isMountingSideView, liveBounds, model]);
+
+  useEffect(() => {
     const context = sceneRef.current;
     if (!context) return;
 
@@ -165,6 +371,7 @@ export function Viewer3D({
     clearGroup(context.keychainHoleRoot);
     setLiveBounds(null);
     onModelBoundsChange?.(null);
+    context.resizeGrid(null);
     context.modelRoot.position.set(0, 0, 0);
 
     if (!model || model.source === 'empty') {
@@ -296,7 +503,24 @@ export function Viewer3D({
     productType,
   ]);
 
-  return <div className="viewer" ref={hostRef} />;
+  const canInspectMountingSide =
+    productType === 'signs' &&
+    model?.source === 'local' &&
+    Boolean(params.mounting_holes);
+
+  return (
+    <div className="viewer" ref={hostRef}>
+      {canInspectMountingSide && (
+        <button
+          type="button"
+          className="mounting-view-toggle"
+          onClick={() => setIsMountingSideView((current) => !current)}
+        >
+          {isMountingSideView ? 'View front' : 'View mounting side'}
+        </button>
+      )}
+    </div>
+  );
 }
 
 function createCutPlane(size: number): THREE.Group {
@@ -543,6 +767,7 @@ function createModelMaterial(
     color: getMaterialColor(productType, source, params, role),
     roughness: role === 'text' ? 0.48 : 0.55,
     metalness: 0.04,
+    flatShading: productType === 'signs' && params.texture !== 'none',
   });
 }
 
