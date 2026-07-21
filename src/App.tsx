@@ -62,9 +62,15 @@ function isWipProductType(type: ProductType): boolean {
 
 export function App() {
   const { t, i18n } = useTranslation();
+  const isDemoMode = useMemo(
+    () => new URLSearchParams(window.location.search).get('demo') === 'true',
+    [],
+  );
   const [configuratorMode, setConfiguratorMode] =
-    useState<ConfiguratorMode>('stl');
-  const [productType, setProductType] = useState<ProductType>('urn');
+    useState<ConfiguratorMode>(isDemoMode ? 'create' : 'stl');
+  const [productType, setProductType] = useState<ProductType>(
+    isDemoMode ? 'signs' : 'urn',
+  );
   const product = useMemo(() => getProduct(productType), [productType]);
   const [paramsByType, setParamsByType] = useState<
     Record<ProductType, ProductParams>
@@ -172,6 +178,8 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    if (isDemoMode) return;
+
     let isMounted = true;
 
     const refreshStpStatus = async () => {
@@ -190,7 +198,7 @@ export function App() {
       isMounted = false;
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [isDemoMode]);
 
   useEffect(() => {
     if (!isDownloadMenuOpen) return;
@@ -456,6 +464,8 @@ export function App() {
   };
 
   const selectConfiguratorMode = (nextMode: ConfiguratorMode) => {
+    if (isDemoMode && nextMode !== 'create') return;
+
     const nextProduct = defaultProductByConfigurator[nextMode];
     setConfiguratorMode(nextMode);
     setProductType(nextProduct);
@@ -582,7 +592,7 @@ export function App() {
   };
 
   const runDownload = async (format = downloadFormat) => {
-    if (!model || model.source === 'empty' || isExporting) return;
+    if (isDemoMode || !model || model.source === 'empty' || isExporting) return;
 
     const requestedFormat = productType === 'signs' ? 'stl' : format;
     setDownloadFormat(requestedFormat);
@@ -642,6 +652,7 @@ export function App() {
   };
 
   const canDownload =
+    !isDemoMode &&
     !isWipProduct &&
     Boolean(
       model &&
@@ -653,7 +664,7 @@ export function App() {
 
   return (
     <main
-      className='app-shell'
+      className={isDemoMode ? 'app-shell app-shell-demo' : 'app-shell'}
       style={{ '--accent': product.accent } as React.CSSProperties}
     >
       <aside className='panel panel-left'>
@@ -674,8 +685,8 @@ export function App() {
               selectConfiguratorMode(event.target.value as ConfiguratorMode)
             }
           >
-            <option value='stl'>{t('configurator.stl')}</option>
-            <option value='image'>{t('configurator.image')}</option>
+            <option value='stl' disabled={isDemoMode}>{t('configurator.stl')}</option>
+            <option value='image' disabled={isDemoMode}>{t('configurator.image')}</option>
             <option value='create'>{t('configurator.create')}</option>
           </select>
         </div>
