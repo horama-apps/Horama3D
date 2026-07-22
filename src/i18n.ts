@@ -19,6 +19,7 @@ const resources = {
         wip: 'WIP', workInProgress: 'trabajo en progreso', objects: 'Objetos',
       },
       products: {
+        lamp: { name: 'Lámparas', description: 'Convierte modelos STL en lámparas con el mecanismo fijo de Horama.' },
         urn: { name: 'Urnas', description: 'Ajustes de transformación para el flujo de urnas STL.' },
         clicker: { name: 'Clickers', description: 'Cuerpo, tapa, espacio del interruptor y opciones de llavero.' },
         textures: { name: 'Texturas', description: 'Patrones de superficie imprimibles con relieve.' },
@@ -28,8 +29,9 @@ const resources = {
       },
       params: {
         size: { label: 'Tamaño' }, lid_text: { label: 'Texto de la tapa' },
-        body_color: { label: 'Color del cuerpo' }, lid_color: { label: 'Color de la tapa' }, text_color: { label: 'Color del texto' },
+        body_color: { label: 'Color del cuerpo' }, base_color: { label: 'Color de la base' }, lid_color: { label: 'Color de la tapa' }, text_color: { label: 'Color del texto' },
         base_thickness_mm: { label: 'Grosor de la base' }, inner_scale: { label: 'Escala interior' }, planar_cut_base_mm: { label: 'Corte de base' },
+        connector_margin_mm: { label: 'Margen del conector' }, part_gap_mm: { label: 'Separación de piezas' },
         cut_height_mm: { label: 'Altura de corte' }, base_protrusion_mm: { label: 'Saliente de la base' },
         bottom_color: { label: 'Color inferior' }, top_color: { label: 'Color superior' },
         keychain_hole: { label: 'Orificio para llavero' }, keychain_hole_placement: { label: 'Ubicación del llavero' },
@@ -65,7 +67,7 @@ const resources = {
       messages: { transformWarnings: 'Advertencias de transformación', validationWarnings: 'Advertencias de validación', validationIssues: 'Problemas de validación', invalidStl: 'El modelo STL no es válido.', rejectedStl: 'Modelo rechazado. Carga un STL válido para continuar.', validStl: 'El archivo STL se cargó correctamente.', validateFailed: 'No se pudo validar el modelo. Inténtalo de nuevo.', missingApi: 'Configura VITE_STP_API_BASE_URL o carga un STL manualmente.' },
       viewer: { front: 'Ver frente', mounting: 'Ver lado de montaje', actions: 'Acciones del visor' },
       notes: { clickerReset: 'Después de generar, usa Restablecer para volver al STL original y mostrar nuevamente el plano de corte Z.' },
-      info: { size: 'Tamaño', targetCapacity: 'Capacidad objetivo', estimatedCapacity: 'Capacidad estimada', appliedScale: 'Escala aplicada', cutHeight: 'Altura de corte' },
+      info: { size: 'Tamaño', targetCapacity: 'Capacidad objetivo', estimatedCapacity: 'Capacidad estimada', appliedScale: 'Escala aplicada', cutHeight: 'Altura de corte', attachmentCenter: 'Centro del mecanismo', attachmentClearance: 'Despeje del mecanismo', effectiveWall: 'Pared efectiva' },
     },
   },
   en: {
@@ -75,6 +77,7 @@ const resources = {
       configurator: { label: 'Configurator type', stl: 'STL', image: 'IMG to STL', create: 'Create from Scratch' },
       common: { generate: 'Generate', reset: 'Reset', download: 'Download', show: 'Show', hide: 'Hide', setup: 'Setup', finishing: 'Finishing', customization: 'Customization', transformInfo: 'Transform info', wip: 'WIP', workInProgress: 'work in progress', objects: 'Objects' },
       products: {
+        lamp: { name: 'Lamps', description: 'Turn STL models into lamps with the fixed Horama mechanism.' },
         urn: { name: 'Urns', description: 'Urn transform settings from the STL workflow.' },
         clicker: { name: 'Clickers', description: 'Button body, cap size, switch clearance, and keychain options.' },
         textures: { name: 'Textures', description: 'Raised printable surface patterns.' },
@@ -83,8 +86,8 @@ const resources = {
         signs: { name: 'Signs', description: 'Custom letter signs with local fonts, hollow walls, and textures.' },
       },
       params: {
-        size: { label: 'Size' }, lid_text: { label: 'Lid text' }, body_color: { label: 'Body color' }, lid_color: { label: 'Lid color' }, text_color: { label: 'Text color' },
-        base_thickness_mm: { label: 'Base thickness' }, inner_scale: { label: 'Inner scale' }, planar_cut_base_mm: { label: 'Base cut' }, cut_height_mm: { label: 'Cut height' }, base_protrusion_mm: { label: 'Base protrusion' },
+        size: { label: 'Size' }, lid_text: { label: 'Lid text' }, body_color: { label: 'Body color' }, base_color: { label: 'Base color' }, lid_color: { label: 'Lid color' }, text_color: { label: 'Text color' },
+        base_thickness_mm: { label: 'Base thickness' }, inner_scale: { label: 'Inner scale' }, planar_cut_base_mm: { label: 'Base cut' }, connector_margin_mm: { label: 'Connector margin' }, part_gap_mm: { label: 'Part gap' }, cut_height_mm: { label: 'Cut height' }, base_protrusion_mm: { label: 'Base protrusion' },
         bottom_color: { label: 'Bottom color' }, top_color: { label: 'Top color' }, keychain_hole: { label: 'Keychain hole' }, keychain_hole_placement: { label: 'Keychain placement' }, keychain_hole_angle_deg: { label: 'Hole position' }, keychain_hole_inset_mm: { label: 'Move toward origin' },
         texture: { label: 'Texture' }, texture_depth_mm: { label: 'Texture depth' }, texture_spacing_mm: { label: 'Pattern spacing' }, text: { label: 'Sign text' }, font: { label: 'Font' }, font_size_mm: { label: 'Letter size' }, letter_spacing_mm: { label: 'Letter spacing' }, line_spacing_mm: { label: 'Line spacing' },
         hollow: { label: 'Hollow letters', help: 'Keeps a thin base and perimeter walls so the letters use less material.' },
@@ -98,7 +101,7 @@ const resources = {
       messages: { transformWarnings: 'Transform warnings', validationWarnings: 'Validation warnings', validationIssues: 'Validation issues', invalidStl: 'The STL model is not valid.', rejectedStl: 'Model rejected. Load a valid STL to continue.', validStl: 'The STL file can be loaded correctly.', validateFailed: 'Could not validate the model. Try again.', missingApi: 'Add VITE_STP_API_BASE_URL or load an STL manually.' },
       viewer: { front: 'View front', mounting: 'View mounting side', actions: 'Viewer actions' },
       notes: { clickerReset: 'After generating, use Reset to return to the original STL and show the Z cut plane again.' },
-      info: { size: 'Size', targetCapacity: 'Target capacity', estimatedCapacity: 'Estimated capacity', appliedScale: 'Applied scale', cutHeight: 'Cut height' },
+      info: { size: 'Size', targetCapacity: 'Target capacity', estimatedCapacity: 'Estimated capacity', appliedScale: 'Applied scale', cutHeight: 'Cut height', attachmentCenter: 'Mechanism center', attachmentClearance: 'Mechanism clearance', effectiveWall: 'Effective wall' },
     },
   },
   fr: {
@@ -108,6 +111,7 @@ const resources = {
       configurator: { label: 'Type de configurateur', stl: 'STL', image: 'IMG vers STL', create: 'Créer de zéro' },
       common: { generate: 'Générer', reset: 'Réinitialiser', download: 'Télécharger', show: 'Afficher', hide: 'Masquer', setup: 'Configuration', finishing: 'Finition', customization: 'Personnalisation', transformInfo: 'Informations de transformation', wip: 'WIP', workInProgress: 'travail en cours', objects: 'Objets' },
       products: {
+        lamp: { name: 'Lampes', description: 'Transforme les modèles STL en lampes avec le mécanisme Horama fixe.' },
         urn: { name: 'Urnes', description: 'Réglages de transformation des urnes pour le flux STL.' },
         clicker: { name: 'Clickers', description: 'Corps, capuchon, dégagement de l’interrupteur et options de porte-clés.' },
         textures: { name: 'Textures', description: 'Motifs de surface imprimables en relief.' },
@@ -116,8 +120,8 @@ const resources = {
         signs: { name: 'Enseignes', description: 'Lettres personnalisées avec polices locales, parois creuses et textures.' },
       },
       params: {
-        size: { label: 'Taille' }, lid_text: { label: 'Texte du couvercle' }, body_color: { label: 'Couleur du corps' }, lid_color: { label: 'Couleur du couvercle' }, text_color: { label: 'Couleur du texte' },
-        base_thickness_mm: { label: 'Épaisseur de la base' }, inner_scale: { label: 'Échelle intérieure' }, planar_cut_base_mm: { label: 'Coupe de la base' }, cut_height_mm: { label: 'Hauteur de coupe' }, base_protrusion_mm: { label: 'Saillie de la base' },
+        size: { label: 'Taille' }, lid_text: { label: 'Texte du couvercle' }, body_color: { label: 'Couleur du corps' }, base_color: { label: 'Couleur de la base' }, lid_color: { label: 'Couleur du couvercle' }, text_color: { label: 'Couleur du texte' },
+        base_thickness_mm: { label: 'Épaisseur de la base' }, inner_scale: { label: 'Échelle intérieure' }, planar_cut_base_mm: { label: 'Coupe de la base' }, connector_margin_mm: { label: 'Marge du connecteur' }, part_gap_mm: { label: 'Écart entre les pièces' }, cut_height_mm: { label: 'Hauteur de coupe' }, base_protrusion_mm: { label: 'Saillie de la base' },
         bottom_color: { label: 'Couleur inférieure' }, top_color: { label: 'Couleur supérieure' }, keychain_hole: { label: 'Trou de porte-clés' }, keychain_hole_placement: { label: 'Emplacement du porte-clés' }, keychain_hole_angle_deg: { label: 'Position du trou' }, keychain_hole_inset_mm: { label: 'Déplacer vers l’origine' },
         texture: { label: 'Texture' }, texture_depth_mm: { label: 'Profondeur de texture' }, texture_spacing_mm: { label: 'Espacement du motif' }, text: { label: 'Texte de l’enseigne' }, font: { label: 'Police' }, font_size_mm: { label: 'Taille des lettres' }, letter_spacing_mm: { label: 'Espacement des lettres' }, line_spacing_mm: { label: 'Espacement des lignes' },
         hollow: { label: 'Lettres creuses', help: 'Conserve une base fine et des parois périphériques pour utiliser moins de matière.' },
@@ -131,7 +135,7 @@ const resources = {
       messages: { transformWarnings: 'Avertissements de transformation', validationWarnings: 'Avertissements de validation', validationIssues: 'Problèmes de validation', invalidStl: 'Le modèle STL n’est pas valide.', rejectedStl: 'Modèle rejeté. Chargez un STL valide pour continuer.', validStl: 'Le fichier STL a été chargé correctement.', validateFailed: 'Impossible de valider le modèle. Réessayez.', missingApi: 'Configurez VITE_STP_API_BASE_URL ou chargez un STL manuellement.' },
       viewer: { front: 'Voir l’avant', mounting: 'Voir le côté montage', actions: 'Actions de la visionneuse' },
       notes: { clickerReset: 'Après la génération, utilisez Réinitialiser pour revenir au STL original et afficher le plan de coupe Z.' },
-      info: { size: 'Taille', targetCapacity: 'Capacité cible', estimatedCapacity: 'Capacité estimée', appliedScale: 'Échelle appliquée', cutHeight: 'Hauteur de coupe' },
+      info: { size: 'Taille', targetCapacity: 'Capacité cible', estimatedCapacity: 'Capacité estimée', appliedScale: 'Échelle appliquée', cutHeight: 'Hauteur de coupe', attachmentCenter: 'Centre du mécanisme', attachmentClearance: 'Dégagement du mécanisme', effectiveWall: 'Paroi effective' },
     },
   },
 } as const;

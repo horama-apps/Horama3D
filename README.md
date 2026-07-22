@@ -43,6 +43,7 @@ VITE_STP_API_BASE_URL=http://localhost:8000 npm run dev
 The API integration is not required for local STL inspection. When the STP API is available, the frontend calls the product transform endpoints with multipart form data:
 
 ```http
+POST /transforms/lamps
 POST /transforms/urns
 POST /transforms/clickers
 POST /transforms/generic

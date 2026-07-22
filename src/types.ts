@@ -1,4 +1,5 @@
 export type ProductType =
+  | 'lamp'
   | 'urn'
   | 'clicker'
   | 'textures'
@@ -85,6 +86,7 @@ export interface GeneratedModel {
   format: 'stl' | '3mf' | 'glb';
   metadata?: {
     objects?: string[];
+    lamp?: LampTransformInfo;
     urn?: UrnTransformInfo;
     clicker?: ClickerTransformInfo;
     mountingHoles?: Array<{
@@ -110,6 +112,15 @@ export interface PreviewFile {
   filename?: string;
   url: string;
   format: 'stl' | '3mf' | 'glb';
+}
+
+export interface LampTransformInfo {
+  applied_scale?: number;
+  minimum_xy_mm?: number[];
+  attachment_center_xy_mm?: number[];
+  attachment_clearance_mm?: number;
+  effective_wall_thickness_mm?: number;
+  estimated_capacity_ml?: number;
 }
 
 export interface UrnTransformInfo {

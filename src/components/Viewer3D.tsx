@@ -40,7 +40,9 @@ export function Viewer3D({
   const onMountingHoleMoveRef = useRef(onMountingHoleMove);
   onMountingHoleMoveRef.current = onMountingHoleMove;
   const materialKey =
-    productType === 'urn'
+    productType === 'lamp'
+      ? `${params.body_color}|${params.base_color}`
+      : productType === 'urn'
       ? `${params.body_color}|${params.lid_color}|${params.text_color}`
       : productType === 'clicker'
         ? `${params.bottom_color}|${params.top_color}`
@@ -783,6 +785,11 @@ function getMaterialColor(
   if (productType === 'clicker') {
     if (role === 'lid') return getColorParam(params.top_color, DEFAULT_COLOR);
     if (role === 'body') return getColorParam(params.bottom_color, DEFAULT_COLOR);
+    return getBaseModelColor(productType, source);
+  }
+  if (productType === 'lamp') {
+    if (role === 'lid') return getColorParam(params.base_color, DEFAULT_COLOR);
+    if (role === 'body') return getColorParam(params.body_color, DEFAULT_COLOR);
     return getBaseModelColor(productType, source);
   }
   if (productType !== 'urn') return getBaseModelColor(productType, source);

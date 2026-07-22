@@ -3,9 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  let stpApiTarget = env.STP_API_TARGET ?? 'http://127.0.0.1:1111';
+  let stpApiTarget = env.STP_API_TARGET ?? 'http://127.0.0.1:8000';
   if (env.ENVIRONMENT == 'dev') {
-    stpApiTarget = 'http://127.0.0.1:1111';
+    stpApiTarget = 'http://127.0.0.1:8000';
   }
 
 

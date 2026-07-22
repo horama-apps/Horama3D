@@ -15,6 +15,12 @@ interface ApiGenerateResponse {
   preview_files?: unknown;
   objects?: unknown;
   cut_height_mm?: unknown;
+  applied_scale?: unknown;
+  minimum_xy_mm?: unknown;
+  attachment_center_xy_mm?: unknown;
+  attachment_clearance_mm?: unknown;
+  effective_wall_thickness_mm?: unknown;
+  estimated_capacity_ml?: unknown;
   urn?: {
     size?: unknown;
     target_capacity_ml?: unknown;
@@ -118,6 +124,11 @@ export async function generateModel(
   params: ProductParams,
   file?: File,
 ): Promise<GeneratedModel> {
+  if (productType === 'lamp') {
+    if (!file) throw new Error('Load a valid STL before generating a lamp.');
+    return generateLampModel(file, params);
+  }
+
   if (productType === 'urn') {
     if (!file) throw new Error('Load a valid STL before applying the urn transform.');
     return generateUrnTransformModel(file, params);
@@ -162,6 +173,63 @@ export async function generateModel(
       format: getPayloadFormat(payload, modelUrl),
       metadata: {
         objects: normalizeStringList(payload.objects),
+        warnings: normalizeMessageList(payload.warnings),
+      },
+    };
+  }
+
+  const blob = await response.blob();
+  return {
+    source: 'api',
+    blob,
+    downloadUrl: URL.createObjectURL(blob),
+    format: inferFormatFromContentType(contentType),
+  };
+}
+
+async function generateLampModel(file: File, params: ProductParams): Promise<GeneratedModel> {
+  const body = new FormData();
+  body.append('file', file, file.name);
+  appendDefined(body, 'output_format', 'stl');
+  appendDefined(body, 'body_color', params.body_color);
+  appendDefined(body, 'base_color', params.base_color);
+  appendDefined(body, 'base_thickness_mm', params.base_thickness_mm);
+  appendDefined(body, 'inner_scale', params.inner_scale);
+  appendDefined(body, 'planar_cut_base_mm', params.planar_cut_base_mm);
+  appendDefined(body, 'connector_margin_mm', params.connector_margin_mm);
+  appendDefined(body, 'part_gap_mm', params.part_gap_mm);
+
+  const response = await fetch(getApiUrl('/transforms/lamps'), {
+    method: 'POST',
+    body,
+  });
+
+  if (!response.ok) {
+    throw new Error(await getApiErrorMessage(response));
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const payload = (await response.json()) as ApiGenerateResponse;
+    const downloadUrl = getPayloadDownloadUrl(payload);
+    const modelUrl = normalizeApiUrl(payload.modelUrl) ?? downloadUrl;
+    return {
+      source: 'api',
+      name: getDownloadName(payload.filename),
+      modelUrl,
+      downloadUrl,
+      previewFiles: getPayloadPreviewFiles(payload),
+      format: getPayloadFormat(payload, modelUrl),
+      metadata: {
+        objects: normalizeStringList(payload.objects),
+        lamp: {
+          applied_scale: normalizeNumber(payload.applied_scale),
+          minimum_xy_mm: normalizeNumberList(payload.minimum_xy_mm),
+          attachment_center_xy_mm: normalizeNumberList(payload.attachment_center_xy_mm),
+          attachment_clearance_mm: normalizeNumber(payload.attachment_clearance_mm),
+          effective_wall_thickness_mm: normalizeNumber(payload.effective_wall_thickness_mm),
+          estimated_capacity_ml: normalizeNumber(payload.estimated_capacity_ml),
+        },
         warnings: normalizeMessageList(payload.warnings),
       },
     };
@@ -475,6 +543,14 @@ function normalizeStringList(value: unknown): string[] | undefined {
 function normalizeNumber(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   return undefined;
+}
+
+function normalizeNumberList(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter(
+    (item): item is number => typeof item === 'number' && Number.isFinite(item),
+  );
+  return values.length > 0 ? values : undefined;
 }
 
 function getPayloadPreviewFiles(payload: ApiGenerateResponse): GeneratedModel['previewFiles'] {

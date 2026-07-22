@@ -9,6 +9,7 @@ import type {
   ProductParams,
   NumberParamDefinition,
   ClickerTransformInfo,
+  LampTransformInfo,
   UrnTransformInfo,
 } from '../types';
 
@@ -44,13 +45,16 @@ export function ParamPanel({
     materials: false,
     transformInfo: false,
   });
+  const lampInfo = product.type === 'lamp' ? modelMetadata?.lamp : undefined;
   const urnInfo = product.type === 'urn' ? modelMetadata?.urn : undefined;
   const clickerInfo = product.type === 'clicker' ? modelMetadata?.clicker : undefined;
-  const transformInfoRows = urnInfo
-    ? getUrnInfoRows(urnInfo, t)
-    : clickerInfo
-      ? getClickerInfoRows(clickerInfo, t)
-      : [];
+  const transformInfoRows = lampInfo
+    ? getLampInfoRows(lampInfo, t)
+    : urnInfo
+      ? getUrnInfoRows(urnInfo, t)
+      : clickerInfo
+        ? getClickerInfoRows(clickerInfo, t)
+        : [];
   const colorParams = product.params.filter((param) => param.kind === 'color');
   const postProcessingParams =
     product.type === 'clicker'
@@ -474,6 +478,19 @@ function formatNumberValue(value: number, step: number): string {
   const stepText = String(step);
   const decimals = stepText.includes('.') ? stepText.split('.')[1].length : 0;
   return value.toFixed(decimals);
+}
+
+function getLampInfoRows(info: LampTransformInfo, t: TFunction) {
+  const center = info.attachment_center_xy_mm?.length === 2
+    ? `${info.attachment_center_xy_mm.map((value) => value.toFixed(2)).join(', ')} mm`
+    : undefined;
+  return [
+    { label: t('info.appliedScale'), value: formatInfoNumber(info.applied_scale) },
+    { label: t('info.estimatedCapacity'), value: formatInfoNumber(info.estimated_capacity_ml, 'ml') },
+    { label: t('info.attachmentCenter'), value: center },
+    { label: t('info.attachmentClearance'), value: formatInfoNumber(info.attachment_clearance_mm, 'mm') },
+    { label: t('info.effectiveWall'), value: formatInfoNumber(info.effective_wall_thickness_mm, 'mm') },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 }
 
 function getUrnInfoRows(info: UrnTransformInfo, t: TFunction) {

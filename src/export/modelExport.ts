@@ -742,7 +742,13 @@ function getExportMaterial(
         : normalizedRole === 'body'
           ? getColorParam(params.bottom_color, DEFAULT_COLOR)
           : getBaseColor(productType)
-      : productType === 'urn'
+      : productType === 'lamp'
+        ? normalizedRole === 'lid'
+          ? getColorParam(params.base_color, DEFAULT_COLOR)
+          : normalizedRole === 'body'
+            ? getColorParam(params.body_color, DEFAULT_COLOR)
+            : getBaseColor(productType)
+        : productType === 'urn'
         ? normalizedRole === 'text'
           ? getColorParam(params.text_color, '#232629')
           : normalizedRole === 'lid'
@@ -763,6 +769,11 @@ function getMaterialName(productType: ProductType, role: string): string {
   if (productType === 'clicker') {
     if (role === 'body') return 'Bottom Color';
     if (role === 'lid') return 'Top Color';
+  }
+
+  if (productType === 'lamp') {
+    if (role === 'body') return 'Body Color';
+    if (role === 'lid') return 'Base Color';
   }
 
   if (productType === 'urn') {
@@ -980,6 +991,13 @@ function getSelectedColors(productType: ProductType, params: ProductParams): Rec
     return {
       bottom_color: normalizeHexColor(getColorParam(params.bottom_color, DEFAULT_COLOR)),
       top_color: normalizeHexColor(getColorParam(params.top_color, DEFAULT_COLOR)),
+    };
+  }
+
+  if (productType === 'lamp') {
+    return {
+      body_color: normalizeHexColor(getColorParam(params.body_color, DEFAULT_COLOR)),
+      base_color: normalizeHexColor(getColorParam(params.base_color, DEFAULT_COLOR)),
     };
   }
 

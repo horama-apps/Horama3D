@@ -46,12 +46,12 @@ interface StpStatus {
 
 const wipProductTypes: ProductType[] = ['keychains', 'image_layers'];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
-  stl: ['urn', 'clicker', 'textures'],
+  stl: ['lamp', 'urn', 'clicker', 'textures'],
   image: ['keychains', 'image_layers'],
   create: ['signs'],
 };
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
-  stl: 'urn',
+  stl: 'lamp',
   image: 'keychains',
   create: 'signs',
 };
@@ -69,12 +69,13 @@ export function App() {
   const [configuratorMode, setConfiguratorMode] =
     useState<ConfiguratorMode>(isDemoMode ? 'create' : 'stl');
   const [productType, setProductType] = useState<ProductType>(
-    isDemoMode ? 'signs' : 'urn',
+    isDemoMode ? 'signs' : 'lamp',
   );
   const product = useMemo(() => getProduct(productType), [productType]);
   const [paramsByType, setParamsByType] = useState<
     Record<ProductType, ProductParams>
   >({
+    lamp: getDefaultParams(getProduct('lamp')),
     urn: getDefaultParams(getProduct('urn')),
     clicker: getDefaultParams(getProduct('clicker')),
     textures: getDefaultParams(getProduct('textures')),
