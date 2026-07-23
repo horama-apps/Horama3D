@@ -278,7 +278,11 @@ export function App() {
     ) {
       setSignHolePositions({});
     }
-    if (productType === 'signs' && key === 'mounting_holes' && value) {
+    if (
+      productType === 'signs' &&
+      key === 'sign_mode' &&
+      value === 'mounting_holes'
+    ) {
       showToast(
         {
           tone: 'warning',
@@ -293,12 +297,6 @@ export function App() {
       [productType]: {
         ...current[productType],
         [key]: value,
-        ...(productType === 'signs' && key === 'hollow' && value
-          ? { mounting_holes: false }
-          : {}),
-        ...(productType === 'signs' && key === 'mounting_holes' && value
-          ? { hollow: false }
-          : {}),
       },
     }));
     setStatus(
@@ -425,7 +423,7 @@ export function App() {
 
   const handleMountingHoleMove = useCallback(
     async (key: string, u: number, v: number) => {
-      if (productType !== 'signs' || !params.mounting_holes) return;
+      if (productType !== 'signs' || params.sign_mode !== 'mounting_holes') return;
       const nextPositions = {
         ...signHolePositions,
         [key]: { u, v },
@@ -952,6 +950,7 @@ export function App() {
         paramOverrides={paramOverrides}
         showMaterialControls={
           isLocalCreator(productType) ||
+          productType === 'textures' ||
           (model?.source === 'local' && ['lamp', 'urn', 'clicker'].includes(productType))
         }
         shouldCollapseSetup={shouldCollapseSetup}

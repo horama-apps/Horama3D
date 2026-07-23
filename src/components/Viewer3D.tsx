@@ -319,9 +319,9 @@ export function Viewer3D({
     const shouldShowMountingSide =
       productType === 'signs' &&
       model?.source === 'local' &&
-      Boolean(params.mounting_holes);
+      params.sign_mode === 'mounting_holes';
     setIsMountingSideView(shouldShowMountingSide);
-  }, [model, params.mounting_holes, productType]);
+  }, [model, params.sign_mode, productType]);
 
   useEffect(() => {
     sceneRef.current?.setCameraSide(isMountingSideView, liveBounds);
@@ -520,7 +520,7 @@ export function Viewer3D({
   const canInspectMountingSide =
     productType === 'signs' &&
     model?.source === 'local' &&
-    Boolean(params.mounting_holes);
+    params.sign_mode === 'mounting_holes';
 
   return (
     <div className="viewer" ref={hostRef}>

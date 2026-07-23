@@ -39,6 +39,9 @@ const LETTER_FONT_OPTIONS = [
   { label: 'Righteous', value: 'righteous_regular', fontFamily: 'Horama Righteous, sans-serif' },
 ];
 
+const publicAsset = (path: string) =>
+  `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`;
+
 export const products: ProductDefinition[] = [
   {
     type: 'lamp',
@@ -282,11 +285,11 @@ export const products: ProductDefinition[] = [
         label: 'Texture',
         defaultValue: 'woven',
         options: [
-          { label: 'Woven', value: 'woven', preview: '/textures/woven.svg' },
-          { label: 'Knit', value: 'knit', preview: '/textures/knit.svg' },
-          { label: 'Carbon', value: 'carbon', preview: '/textures/carbon.svg' },
-          { label: 'Wood', value: 'wood', preview: '/textures/wood.svg' },
-          { label: 'None', value: 'none', preview: '/textures/none.svg' },
+          { label: 'Woven', value: 'woven', preview: publicAsset('textures/woven.svg') },
+          { label: 'Knit', value: 'knit', preview: publicAsset('textures/knit.svg') },
+          { label: 'Carbon', value: 'carbon', preview: publicAsset('textures/carbon.svg') },
+          { label: 'Wood', value: 'wood', preview: publicAsset('textures/wood.svg') },
+          { label: 'None', value: 'none', preview: publicAsset('textures/none.svg') },
         ],
       },
       {
@@ -417,17 +420,21 @@ export const products: ProductDefinition[] = [
         defaultValue: 2.4,
       },
       {
-        kind: 'boolean',
-        key: 'hollow',
-        label: 'Hollow letters',
-        help: 'Keeps a thin base and perimeter walls so the letters use less material.',
-        defaultValue: false,
+        kind: 'select',
+        key: 'sign_mode',
+        label: 'Letter construction',
+        defaultValue: 'solid',
+        options: [
+          { label: 'Solid letters', value: 'solid' },
+          { label: 'Hollow letters', value: 'hollow' },
+          { label: 'Blind mounting holes', value: 'mounting_holes' },
+        ],
       },
       {
         kind: 'boolean',
-        key: 'mounting_holes',
-        label: 'Blind mounting holes',
-        help: 'Adds a centered blind cavity behind each letter for balanced nail mounting.',
+        key: 'mirror_hollow',
+        label: 'Mirror letters',
+        help: 'Mirrors hollow letters so they read correctly when the open side faces the wall or is filled with LEDs.',
         defaultValue: false,
       },
       {
@@ -477,11 +484,11 @@ export const products: ProductDefinition[] = [
         label: 'Surface texture',
         defaultValue: 'none',
         options: [
-          { label: 'None', value: 'none', preview: '/textures/none.svg' },
-          { label: 'Woven', value: 'woven', preview: '/textures/woven.svg' },
-          { label: 'Knit', value: 'knit', preview: '/textures/knit.svg' },
-          { label: 'Carbon', value: 'carbon', preview: '/textures/carbon.svg' },
-          { label: 'Wood', value: 'wood', preview: '/textures/wood.svg' },
+          { label: 'None', value: 'none', preview: publicAsset('textures/none.svg') },
+          { label: 'Woven', value: 'woven', preview: publicAsset('textures/woven.svg') },
+          { label: 'Knit', value: 'knit', preview: publicAsset('textures/knit.svg') },
+          { label: 'Carbon', value: 'carbon', preview: publicAsset('textures/carbon.svg') },
+          { label: 'Wood', value: 'wood', preview: publicAsset('textures/wood.svg') },
         ],
       },
       {

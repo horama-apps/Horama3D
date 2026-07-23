@@ -51,7 +51,7 @@ export async function generateSignModel(params: ProductParams): Promise<Generate
   const font = await loadFont(fontKey);
   const baseDepth = positiveNumber(params.base_thickness_mm, 2.4);
   const wallHeight = positiveNumber(params.wall_height_mm, 20);
-  const hollow = Boolean(params.hollow);
+  const hollow = params.sign_mode === 'hollow';
   const { group, mountingHoles: generatedMountingHoles } = buildSignGroup(
     font,
     text,
@@ -110,7 +110,7 @@ function buildSignGroup(
   const letterSpacing = finiteNumber(params.letter_spacing_mm, 2);
   const lineSpacing = positiveNumber(params.line_spacing_mm, 10);
   const wallThickness = positiveNumber(params.wall_thickness_mm, 1.6);
-  const mountingHoles = Boolean(params.mounting_holes) && !hollow;
+  const mountingHoles = params.sign_mode === 'mounting_holes';
   const mountingRadius = positiveNumber(params.mounting_hole_diameter_mm, 4) / 2;
   const totalDepth = baseDepth + wallHeight;
   const minimumFrontSkin = Math.min(1.2, totalDepth * 0.25);
@@ -209,6 +209,9 @@ function buildSignGroup(
   });
 
   centerGroup(signGroup);
+  if (hollow && Boolean(params.mirror_hollow)) {
+    signGroup.scale.x = -1;
+  }
   mountingHolePreviews.forEach((hole) => {
     hole.x += signGroup.position.x;
     hole.y += signGroup.position.y;

@@ -43,7 +43,7 @@ export function ParamPanel({
   });
   const [openSections, setOpenSections] = useState({
     parameters: true,
-    materials: false,
+    materials: true,
     transformInfo: false,
   });
   const lampInfo = product.type === 'lamp' ? modelMetadata?.lamp : undefined;
@@ -70,7 +70,7 @@ export function ParamPanel({
             'keychain_hole_inset_mm',
           ].includes(param.key),
         )
-      : product.type === 'signs'
+      : product.type === 'signs' || product.type === 'textures'
         ? product.params.filter((param) =>
             [
               'texture',
@@ -88,13 +88,16 @@ export function ParamPanel({
     (param) =>
       product.type !== 'signs' ||
       (!['wall_thickness_mm', 'wall_height_mm'].includes(param.key) &&
-        !['mounting_hole_diameter_mm', 'mounting_hole_depth_mm'].includes(param.key)) ||
-      (['wall_thickness_mm', 'wall_height_mm'].includes(param.key) && Boolean(params.hollow)) ||
-      (['mounting_hole_diameter_mm', 'mounting_hole_depth_mm'].includes(param.key) && Boolean(params.mounting_holes)),
+        !['mounting_hole_diameter_mm', 'mounting_hole_depth_mm'].includes(param.key) &&
+        param.key !== 'mirror_hollow') ||
+      (['wall_thickness_mm', 'wall_height_mm', 'mirror_hollow'].includes(param.key) &&
+        params.sign_mode === 'hollow') ||
+      (['mounting_hole_diameter_mm', 'mounting_hole_depth_mm'].includes(param.key) &&
+        params.sign_mode === 'mounting_holes'),
   );
   const visiblePostProcessingParams = postProcessingParams.filter(
     (param) =>
-      product.type === 'signs'
+      product.type === 'signs' || product.type === 'textures'
         ? param.key === 'texture' || params.texture !== 'none'
         : param.key === 'keychain_hole' ||
       (Boolean(params.keychain_hole) &&
@@ -150,7 +153,7 @@ export function ParamPanel({
                 param={param}
                 productType={product.type}
                 value={params[param.key] ?? param.defaultValue}
-                disabled={disabled || isExclusiveSignOptionDisabled(param.key, params)}
+                disabled={disabled}
                 override={paramOverrides[param.key]}
                 onChange={(value) => onChange(param.key, value)}
               />
@@ -162,7 +165,11 @@ export function ParamPanel({
       {shouldShowPostProcessingSection && (
         <section className="color-section" aria-label={t('common.finishing')}>
           <CollapsibleHeading
-            label={product.type === 'signs' ? t('common.finishing') : t('common.customization')}
+            label={
+              product.type === 'signs' || product.type === 'textures'
+                ? t('common.finishing')
+                : t('common.customization')
+            }
             isOpen={openSections.materials}
             onToggle={() => toggleSection('materials')}
           />
@@ -482,12 +489,6 @@ function FontDropdown({
       </details>
     </div>
   );
-}
-
-function isExclusiveSignOptionDisabled(key: string, params: ProductParams): boolean {
-  if (key === 'hollow') return Boolean(params.mounting_holes);
-  if (key === 'mounting_holes') return Boolean(params.hollow);
-  return false;
 }
 
 function formatNumberValue(value: number, step: number): string {
