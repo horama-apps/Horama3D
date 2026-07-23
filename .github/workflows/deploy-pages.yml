@@ -35,7 +35,6 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          VITE_STP_API_BASE_URL: ${{ vars.STP_API_BASE_URL }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

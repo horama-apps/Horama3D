@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import packageMetadata from '../package.json';
 import {
-  Box,
   ChevronDown,
   Download,
   FileUp,
@@ -9,8 +9,16 @@ import {
   RotateCcw,
   Wand2,
 } from 'lucide-react';
-import { analyzeModel, checkStpHealth, generateModel } from './api/stpApi';
+import {
+  generateLampModelLocally,
+} from './generation/lampGenerator';
+import { generateClickerModelLocally } from './generation/clickerGenerator';
+import { generateUrnModelLocally } from './generation/urnGenerator';
 import { generateSignModel } from './generation/signGenerator';
+import { generateBraceletGemsModel } from './generation/braceletGenerator';
+import { generateTextureModelLocally } from './generation/textureGenerator';
+import { analyzeStlLocally } from './generation/stlValidation';
+import { generateImageLayersLocally } from './generation/imageLayersGenerator';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
 import {
@@ -28,7 +36,6 @@ import type {
 
 type ToastTone = 'success' | 'warning' | 'error' | 'issue';
 type ToastPlacement = 'center' | 'corner' | 'top';
-type StpStatusTone = 'checking' | 'healthy' | 'unhealthy';
 type ConfiguratorMode = 'stl' | 'image' | 'create';
 
 interface Toast {
@@ -39,25 +46,24 @@ interface Toast {
   messages?: string[];
 }
 
-interface StpStatus {
-  tone: StpStatusTone;
-  label: string;
-}
-
-const wipProductTypes: ProductType[] = ['keychains', 'image_layers'];
+const wipProductTypes: ProductType[] = ['keychains'];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
   stl: ['lamp', 'urn', 'clicker', 'textures'],
   image: ['keychains', 'image_layers'],
-  create: ['signs'],
+  create: ['signs', 'bracelet_gems'],
 };
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
   stl: 'lamp',
-  image: 'keychains',
+  image: 'image_layers',
   create: 'signs',
 };
 
 function isWipProductType(type: ProductType): boolean {
   return wipProductTypes.includes(type);
+}
+
+function isLocalCreator(type: ProductType): boolean {
+  return type === 'signs' || type === 'bracelet_gems';
 }
 
 export function App() {
@@ -82,12 +88,14 @@ export function App() {
     keychains: getDefaultParams(getProduct('keychains')),
     image_layers: getDefaultParams(getProduct('image_layers')),
     signs: getDefaultParams(getProduct('signs')),
+    bracelet_gems: getDefaultParams(getProduct('bracelet_gems')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
     source: 'empty',
     format: 'stl',
   });
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
   const [status, setStatus] = useState(
     t('status.loadStl'),
   );
@@ -96,10 +104,6 @@ export function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('stl');
   const [isModelValidated, setIsModelValidated] = useState(false);
-  const [stpStatus, setStpStatus] = useState<StpStatus>({
-    tone: 'checking',
-    label: t('status.checkingStp'),
-  });
   const [hasUsedViewerActions, setHasUsedViewerActions] = useState(false);
   const [shouldCollapseSetup, setShouldCollapseSetup] = useState(false);
   const [isCutPlaneDismissed, setIsCutPlaneDismissed] = useState(false);
@@ -107,6 +111,7 @@ export function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlRef = useRef<string | null>(null);
+  const localUrlRefs = useRef<Set<string>>(new Set());
   const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const toastIdRef = useRef(0);
   const toastTimeoutRefs = useRef<number[]>([]);
@@ -124,7 +129,7 @@ export function App() {
     [configuratorMode],
   );
   const isWipProduct = isWipProductType(productType);
-  const requiresUploadedModel = productType !== 'signs';
+  const requiresUploadedModel = !isLocalCreator(productType);
   const isLocked = isWipProduct || (requiresUploadedModel && !isModelValidated);
   const clickerCutHeightMin = modelBounds
     ? roundToTenth(modelBounds.height * 0.2)
@@ -174,32 +179,10 @@ export function App() {
   useEffect(() => {
     return () => {
       if (uploadedUrlRef.current) URL.revokeObjectURL(uploadedUrlRef.current);
+      localUrlRefs.current.forEach((url) => URL.revokeObjectURL(url));
       toastTimeoutRefs.current.forEach(window.clearTimeout);
     };
   }, []);
-
-  useEffect(() => {
-    if (isDemoMode) return;
-
-    let isMounted = true;
-
-    const refreshStpStatus = async () => {
-      const health = await checkStpHealth();
-      if (!isMounted) return;
-      setStpStatus({
-        tone: health.isHealthy ? 'healthy' : 'unhealthy',
-        label: health.message,
-      });
-    };
-
-    void refreshStpStatus();
-    const intervalId = window.setInterval(refreshStpStatus, 20000);
-
-    return () => {
-      isMounted = false;
-      window.clearInterval(intervalId);
-    };
-  }, [isDemoMode]);
 
   useEffect(() => {
     if (!isDownloadMenuOpen) return;
@@ -237,6 +220,8 @@ export function App() {
   };
 
   const setActiveModel = (nextModel: GeneratedModel | null) => {
+    localUrlRefs.current.forEach((url) => URL.revokeObjectURL(url));
+    localUrlRefs.current.clear();
     if (
       uploadedUrlRef.current &&
       nextModel?.modelUrl !== uploadedUrlRef.current
@@ -246,6 +231,11 @@ export function App() {
     }
     if (nextModel?.source === 'upload' && nextModel.modelUrl) {
       uploadedUrlRef.current = nextModel.modelUrl;
+    }
+    if (nextModel?.source === 'local') {
+      nextModel.previewFiles?.forEach((file) => localUrlRefs.current.add(file.url));
+      if (nextModel.modelUrl?.startsWith('blob:')) localUrlRefs.current.add(nextModel.modelUrl);
+      if (nextModel.downloadUrl?.startsWith('blob:')) localUrlRefs.current.add(nextModel.downloadUrl);
     }
     setModel(nextModel);
   };
@@ -331,9 +321,13 @@ export function App() {
     } else if (configuratorMode === 'stl') {
       setStatus(t('status.loadStl'));
     } else if (configuratorMode === 'create') {
-      setStatus(t('status.configureSign'));
+      setStatus(
+        productType === 'bracelet_gems'
+          ? t('status.configureBracelet')
+          : t('status.configureSign'),
+      );
     } else {
-      setStatus(t('status.imageWip'));
+      setStatus(uploadedImageFile ? t('status.imageReady') : t('status.loadImage'));
     }
   }, [i18n.resolvedLanguage]);
 
@@ -370,20 +364,37 @@ export function App() {
     setStatus(
       productType === 'signs'
         ? t('status.generatingSign')
-        : t('status.generatingStp'),
+        : productType === 'bracelet_gems'
+          ? t('status.generatingBracelet')
+        : productType === 'image_layers'
+          ? t('status.generatingImageLayersLocal')
+        : productType === 'lamp'
+          ? t('status.generatingLampLocal')
+        : productType === 'clicker'
+          ? t('status.generatingClickerLocal')
+        : productType === 'textures'
+          ? t('status.generatingTexturesLocal')
+        : t('status.generatingUrnLocal'),
     );
     try {
       const generated =
-        productType === 'signs'
+        productType === 'image_layers'
+          ? await generateImageLayersLocally(uploadedImageFile as File, params)
+        : productType === 'signs'
           ? await generateSignModel({
               ...params,
               mounting_hole_positions: JSON.stringify(signHolePositions),
             })
-          : await generateModel(
-              productType,
-              params,
-              uploadedFile ?? undefined,
-            );
+          : productType === 'bracelet_gems'
+            ? await generateBraceletGemsModel(params)
+          : productType === 'lamp'
+            ? await generateLampModelLocally(uploadedFile as File, params)
+          : productType === 'clicker'
+            ? await generateClickerModelLocally(uploadedFile as File, params)
+          : productType === 'textures'
+            ? await generateTextureModelLocally(uploadedFile as File, params)
+          : await generateUrnModelLocally(uploadedFile as File, params);
+      if (productType === 'image_layers') setDownloadFormat('3mf');
       setActiveModel(generated);
       setIsModelValidated(generated.source !== 'empty');
       if (
@@ -402,7 +413,7 @@ export function App() {
       }
       setStatus(
         generated.source === 'empty'
-          ? t('messages.missingApi')
+          ? t('messages.noModel')
           : t('status.generated'),
       );
     } catch (error) {
@@ -445,13 +456,23 @@ export function App() {
     setShouldCollapseSetup(false);
     setIsCutPlaneDismissed(false);
 
-    if (nextType === 'signs' || isWipProductType(nextType)) {
+    if (isLocalCreator(nextType) || isWipProductType(nextType)) {
       setActiveModel({ source: 'empty', format: 'stl' });
       setStatus(
-        nextType === 'signs'
-          ? t('status.configureSign')
+        nextType === 'bracelet_gems'
+          ? t('status.configureBracelet')
+          : nextType === 'signs'
+            ? t('status.configureSign')
           : t('status.moduleWip'),
       );
+      return;
+    }
+
+    if (nextType === 'image_layers') {
+      setActiveModel({ source: 'empty', format: 'stl' });
+      setIsModelValidated(Boolean(uploadedImageFile));
+      setStatus(uploadedImageFile ? t('status.imageReady') : t('status.loadImage'));
+      setDownloadFormat('3mf');
       return;
     }
 
@@ -480,6 +501,14 @@ export function App() {
       return;
     }
 
+    if (nextMode === 'image' && uploadedImageFile) {
+      setActiveModel({ source: 'empty', format: 'stl' });
+      setIsModelValidated(true);
+      setDownloadFormat('3mf');
+      setStatus(t('status.imageReady'));
+      return;
+    }
+
     setActiveModel({ source: 'empty', format: 'stl' });
     setIsModelValidated(false);
     setModelBounds(null);
@@ -488,7 +517,7 @@ export function App() {
         ? t('status.loadStl')
         : nextMode === 'create'
           ? t('status.configureSign')
-          : t('status.imageWip'),
+          : t('status.loadImage'),
     );
   };
 
@@ -502,6 +531,13 @@ export function App() {
 
     if (productType === 'clicker' && uploadedFile) {
       restoreUploadedModel(t('status.stlReady'));
+      return;
+    }
+
+    if (productType === 'image_layers' && uploadedImageFile) {
+      setActiveModel({ source: 'empty', format: 'stl' });
+      setIsModelValidated(true);
+      setStatus(t('status.imageReady'));
       return;
     }
 
@@ -519,11 +555,11 @@ export function App() {
       return;
     }
 
-    returnToDefaultState(`Analyzing ${file.name} through STP...`);
+    returnToDefaultState(`${t('upload.analyzing')}: ${file.name}`);
     setIsAnalyzing(true);
 
     try {
-      const analysis = await analyzeModel(file);
+      const analysis = await analyzeStlLocally(file);
 
       if (analysis.warnings.length > 0) {
         showToast(
@@ -592,33 +628,49 @@ export function App() {
     }
   };
 
+  const loadImageFile = (file: File | undefined) => {
+    if (!file) return;
+    const isImage = ['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name);
+    if (!isImage) {
+      setStatus(t('upload.selectImage'));
+      if (uploadInputRef.current) uploadInputRef.current.value = '';
+      return;
+    }
+    setUploadedImageFile(file);
+    setActiveModel({ source: 'empty', format: 'stl' });
+    setIsModelValidated(true);
+    setShouldCollapseSetup(false);
+    setDownloadFormat('3mf');
+    setStatus(t('status.imageReady'));
+  };
+
   const runDownload = async (format = downloadFormat) => {
     if (isDemoMode || !model || model.source === 'empty' || isExporting) return;
 
-    const requestedFormat = productType === 'signs' ? 'stl' : format;
+    const requestedFormat = isLocalCreator(productType) ? 'stl' : format;
     setDownloadFormat(requestedFormat);
     setHasUsedViewerActions(true);
     setIsExporting(true);
     setStatus(
       requestedFormat === '3mf'
         ? t('status.preparing3mf')
-        : productType === 'signs'
+        : isLocalCreator(productType)
           ? t('status.preparingStl')
           : t('status.preparingZip'),
     );
 
     try {
       let exported: { blob: Blob; filename: string };
-      if (productType === 'signs') {
-        let signBlob = model.blob;
-        if (!signBlob) {
+      if (isLocalCreator(productType)) {
+        let localBlob = model.blob;
+        if (!localBlob) {
           const response = await fetch(model.downloadUrl ?? model.modelUrl ?? '');
-          if (!response.ok) throw new Error('Could not prepare the sign STL.');
-          signBlob = await response.blob();
+          if (!response.ok) throw new Error('Could not prepare the local STL.');
+          localBlob = await response.blob();
         }
         exported = {
-          blob: signBlob,
-          filename: model.name ?? 'sign.stl',
+          blob: localBlob,
+          filename: model.name ?? `${productType}.stl`,
         };
       } else {
         exported = await exportModel(
@@ -658,7 +710,7 @@ export function App() {
     Boolean(
       model &&
       model.source !== 'empty' &&
-      (productType !== 'signs' || model.source === 'local'),
+      (!isLocalCreator(productType) || model.source === 'local'),
     );
   const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
   const downloadFormats: DownloadFormat[] = ['stl', '3mf'];
@@ -671,36 +723,37 @@ export function App() {
       <aside className='panel panel-left'>
         <div className='brand'>
           <div className='brand-mark'>
-            <Box size={22} />
+            <img
+              src={`${import.meta.env.BASE_URL}horama-mark.svg`}
+              alt='Horama'
+            />
           </div>
-          <div>
-            <h1>{t('brand.title')}</h1>
+          <div className='configurator-selector configurator-selector-brand'>
+            <select
+              aria-label={t('configurator.label')}
+              value={configuratorMode}
+              onChange={(event) =>
+                selectConfiguratorMode(event.target.value as ConfiguratorMode)
+              }
+            >
+              <option value='stl' disabled={isDemoMode}>{t('configurator.stl')}</option>
+              <option value='image' disabled={isDemoMode}>{t('configurator.image')}</option>
+              <option value='create'>{t('configurator.create')}</option>
+            </select>
           </div>
-        </div>
-
-        <div className='configurator-selector'>
-          <select
-            aria-label={t('configurator.label')}
-            value={configuratorMode}
-            onChange={(event) =>
-              selectConfiguratorMode(event.target.value as ConfiguratorMode)
-            }
-          >
-            <option value='stl' disabled={isDemoMode}>{t('configurator.stl')}</option>
-            <option value='image' disabled={isDemoMode}>{t('configurator.image')}</option>
-            <option value='create'>{t('configurator.create')}</option>
-          </select>
         </div>
 
         <div className='product-list'>
-          {configuratorMode === 'stl' ? (
+          {configuratorMode === 'stl' || productType === 'image_layers' ? (
             <div className='upload-card'>
             <input
               ref={uploadInputRef}
               className='file-input'
               type='file'
-              accept='.stl,model/stl,application/vnd.ms-pki.stl'
-              onChange={(event) => loadStlFile(event.target.files?.[0])}
+              accept={productType === 'image_layers' ? '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp' : '.stl,model/stl,application/vnd.ms-pki.stl'}
+              onChange={(event) => productType === 'image_layers'
+                ? loadImageFile(event.target.files?.[0])
+                : void loadStlFile(event.target.files?.[0])}
             />
             <button
               className='upload-button'
@@ -712,12 +765,16 @@ export function App() {
               ) : (
                 <FileUp size={18} />
               )}
-              {isAnalyzing ? t('upload.analyzing') : t('upload.load')}
+              {isAnalyzing
+                ? t('upload.analyzing')
+                : productType === 'image_layers'
+                  ? t('upload.loadImage')
+                  : t('upload.load')}
             </button>
             <p>
-              {uploadedFile
-                ? uploadedFile.name
-                : t('upload.select')}
+              {productType === 'image_layers'
+                ? uploadedImageFile?.name ?? t('upload.selectImage')
+                : uploadedFile?.name ?? t('upload.select')}
             </p>
             </div>
           ) : null}
@@ -733,7 +790,7 @@ export function App() {
               style={{ '--product-accent': item.accent } as React.CSSProperties}
               disabled={
                 isLocked &&
-                item.type !== 'signs' &&
+                !isLocalCreator(item.type) &&
                 !isWipProductType(item.type) &&
                 !isWipProduct
               }
@@ -751,30 +808,25 @@ export function App() {
         </div>
 
         <div
-          className={`stp-status stp-status-${configuratorMode === 'create' ? 'healthy' : configuratorMode === 'image' ? 'checking' : stpStatus.tone}`}
+          className={`generator-status generator-status-${isWipProduct ? 'checking' : 'healthy'}`}
           title={
-            configuratorMode === 'create'
-              ? t('status.localGenerator')
-              : configuratorMode === 'image'
-                ? t('status.imageWorkflow')
-                : stpStatus.label
+            isWipProduct
+              ? t('status.imageWorkflow')
+              : t('status.localGenerator')
           }
           aria-label={
-            configuratorMode === 'create'
-              ? t('status.localGenerator')
-              : configuratorMode === 'image'
-                ? t('status.imageWorkflow')
-              : `${t('status.stpApi')}: ${stpStatus.label}`
+            isWipProduct
+              ? t('status.imageWorkflow')
+              : t('status.localGenerator')
           }
         >
           <span aria-hidden='true' />
           <strong>
-            {configuratorMode === 'create'
-              ? t('status.localGenerator')
-              : configuratorMode === 'image'
-                ? t('status.imageWorkflow')
-                : t('status.stpApi')}
+            {isWipProduct
+              ? t('status.imageWorkflow')
+              : t('status.localGenerator')}
           </strong>
+          <small className='generator-version'>v{packageMetadata.version}</small>
         </div>
       </aside>
 
@@ -809,11 +861,11 @@ export function App() {
             <RotateCcw size={17} />
             <span>{t('common.reset')}</span>
           </button>
-          {productType === 'signs' ? (
+          {isLocalCreator(productType) ? (
             <button
               className='tool-action'
               disabled={!canDownload || isExporting}
-              aria-label={`${t('common.download')} ${model?.name ?? 'sign.stl'}`}
+              aria-label={`${t('common.download')} ${model?.name ?? `${productType}.stl`}`}
               title={t('common.download')}
               onClick={() => void runDownload('stl')}
             >
@@ -885,7 +937,9 @@ export function App() {
           <div className={isWipProduct ? 'stage-lock stage-lock-wip' : 'stage-lock'}>
             {isWipProduct
               ? t('common.workInProgress')
-              : t('status.loadValidStl')}
+              : productType === 'image_layers'
+                ? t('status.loadImage')
+                : t('status.loadValidStl')}
           </div>
         )}
       </section>
@@ -896,7 +950,10 @@ export function App() {
         disabled={isLocked}
         modelMetadata={model?.metadata}
         paramOverrides={paramOverrides}
-        showMaterialControls={productType === 'signs' || model?.source === 'api'}
+        showMaterialControls={
+          isLocalCreator(productType) ||
+          (model?.source === 'local' && ['lamp', 'urn', 'clicker'].includes(productType))
+        }
         shouldCollapseSetup={shouldCollapseSetup}
         headerAction={<LanguageMenu />}
         onChange={updateParam}

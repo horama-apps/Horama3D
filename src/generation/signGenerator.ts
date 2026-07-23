@@ -82,7 +82,7 @@ export async function generateSignModel(params: ProductParams): Promise<Generate
   };
 }
 
-async function loadFont(key: string): Promise<Font> {
+export async function loadFont(key: string): Promise<Font> {
   const isTtf = localTtfFonts.has(key);
   const url = bundledFonts[key] ?? `${import.meta.env.BASE_URL}fonts/${key}.${isTtf ? 'ttf' : 'typeface.json'}`;
   const cached = fontCache.get(url);

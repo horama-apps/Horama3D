@@ -18,6 +18,7 @@ interface ExportPart {
   object?: string;
   filename: string;
   url: string;
+  color?: string;
 }
 
 interface ExportMaterial {
@@ -78,7 +79,7 @@ export function getDefaultExportName(
   productType: ProductType,
   format: DownloadFormat,
 ): string {
-  const baseName = getBaseName(model?.name ?? `${productType}-stp-model`);
+  const baseName = getBaseName(model?.name ?? `${productType}-model`);
   return format === '3mf' ? `${baseName}.3mf` : `${baseName}-stl.zip`;
 }
 
@@ -134,7 +135,7 @@ async function export3mf(
   const meshes = addKeychainLoopToClickerMeshes(
     resolveMeshRoles(productType, parsedMeshes).map(({ part, role, mesh }) => ({
     part: { ...part, role },
-    material: getExportMaterial(productType, params, role),
+    material: getExportMaterial(productType, params, role, part.color),
     mesh,
     })),
     productType,
@@ -185,6 +186,7 @@ function getExportParts(model: GeneratedModel, productType: ProductType): Export
         object: file.object,
         filename: getPreviewFilename(file, index),
         url: file.url,
+        color: file.color,
       }));
   }
 
@@ -235,7 +237,7 @@ async function buildClickerStlFilesWithKeychain(
   const meshes = addKeychainLoopToClickerMeshes(
     resolveMeshRoles(productType, parsedMeshes).map(({ part, role, mesh }) => ({
       part: { ...part, role },
-      material: getExportMaterial(productType, params, role),
+      material: getExportMaterial(productType, params, role, part.color),
       mesh,
     })),
     productType,
@@ -733,8 +735,17 @@ function getExportMaterial(
   productType: ProductType,
   params: ProductParams,
   role: string,
+  explicitColor?: string,
 ): ExportMaterial {
   const normalizedRole = role;
+  if (explicitColor) {
+    const normalizedColor = normalizeHexColor(explicitColor);
+    return {
+      role: `color-${normalizedColor.slice(1).toLowerCase()}`,
+      name: `Image Layer ${normalizedColor}`,
+      color: `${normalizedColor}FF`,
+    };
+  }
   const color =
     productType === 'clicker'
       ? normalizedRole === 'lid'

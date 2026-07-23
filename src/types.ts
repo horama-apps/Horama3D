@@ -5,7 +5,8 @@ export type ProductType =
   | 'textures'
   | 'keychains'
   | 'image_layers'
-  | 'signs';
+  | 'signs'
+  | 'bracelet_gems';
 
 export type ParamKind = 'number' | 'boolean' | 'select' | 'text' | 'color';
 
@@ -77,7 +78,7 @@ export interface ModelBounds {
 }
 
 export interface GeneratedModel {
-  source: 'empty' | 'api' | 'upload' | 'local';
+  source: 'empty' | 'upload' | 'local';
   name?: string;
   modelUrl?: string;
   downloadUrl?: string;
@@ -89,6 +90,7 @@ export interface GeneratedModel {
     lamp?: LampTransformInfo;
     urn?: UrnTransformInfo;
     clicker?: ClickerTransformInfo;
+    imageLayers?: ImageLayersTransformInfo;
     mountingHoles?: Array<{
       key: string;
       x: number;
@@ -112,6 +114,7 @@ export interface PreviewFile {
   filename?: string;
   url: string;
   format: 'stl' | '3mf' | 'glb';
+  color?: string;
 }
 
 export interface LampTransformInfo {
@@ -130,8 +133,22 @@ export interface UrnTransformInfo {
   estimated_capacity_ml?: number;
   requested_scale?: number;
   applied_scale?: number;
+  pressure_rib_count?: number;
 }
 
 export interface ClickerTransformInfo {
   cut_height_mm?: number;
+}
+
+export interface ImageLayersTransformInfo {
+  original_width_px?: number;
+  original_height_px?: number;
+  processed_width_px?: number;
+  processed_height_px?: number;
+  width_mm?: number;
+  height_mm?: number;
+  layer_height_mm?: number;
+  color_count?: number;
+  layer_count?: number;
+  colors?: string[];
 }

@@ -46,6 +46,8 @@ export function Viewer3D({
       ? `${params.body_color}|${params.lid_color}|${params.text_color}`
       : productType === 'clicker'
         ? `${params.bottom_color}|${params.top_color}`
+        : productType === 'bracelet_gems'
+          ? String(params.body_color)
         : productType;
   const sceneRef = useRef<{
     scene: THREE.Scene;
@@ -392,9 +394,16 @@ export function Viewer3D({
           geometry.computeVertexNormals();
           const mesh = new THREE.Mesh(
             geometry,
-            createModelMaterial(productType, model.source, params, getPreviewRole(previewFile.role, previewFile.object)),
+            createModelMaterial(
+              productType,
+              model.source,
+              params,
+              getPreviewRole(previewFile.role, previewFile.object),
+              previewFile.color,
+            ),
           );
           mesh.name = previewFile.object ?? previewFile.role;
+          mesh.userData.previewColor = previewFile.color;
           context.modelRoot.add(mesh);
           loadedCount += 1;
           if (loadedCount === expectedCount) {
@@ -477,7 +486,8 @@ export function Viewer3D({
     const angleDeg = Number(params.keychain_hole_angle_deg);
     const shouldShowHole =
       productType === 'clicker' &&
-      model?.source === 'api' &&
+      model?.source !== 'upload' &&
+      model?.source !== 'empty' &&
       Boolean(params.keychain_hole) &&
       bounds &&
       Number.isFinite(angleDeg);
@@ -766,9 +776,10 @@ function createModelMaterial(
   source: GeneratedModel['source'],
   params: ProductParams,
   role: PreviewRole = 'body',
+  explicitColor?: string,
 ): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
-    color: getMaterialColor(productType, source, params, role),
+    color: explicitColor || getMaterialColor(productType, source, params, role),
     roughness: role === 'text' ? 0.48 : 0.55,
     metalness: 0.04,
     flatShading: productType === 'signs' && params.texture !== 'none',
@@ -791,6 +802,9 @@ function getMaterialColor(
     if (role === 'lid') return getColorParam(params.base_color, DEFAULT_COLOR);
     if (role === 'body') return getColorParam(params.body_color, DEFAULT_COLOR);
     return getBaseModelColor(productType, source);
+  }
+  if (productType === 'bracelet_gems') {
+    return getColorParam(params.body_color, '#b978d0');
   }
   if (productType !== 'urn') return getBaseModelColor(productType, source);
   if (role === 'text') return getColorParam(params.text_color, '#232629');
@@ -817,7 +831,13 @@ function applyNamedMaterials(
   root.traverse((node) => {
     if (!(node instanceof THREE.Mesh)) return;
     const role = getObjectRole(node);
-    node.material = createModelMaterial(productType, source, params, role);
+    node.material = createModelMaterial(
+      productType,
+      source,
+      params,
+      role,
+      typeof node.userData.previewColor === 'string' ? node.userData.previewColor : undefined,
+    );
   });
 }
 

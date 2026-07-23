@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-labelledby="title desc">
+  <title id="title">Horama</title>
+  <desc id="desc">Cerebro Horama con una H y un cubo 3D centrado.</desc>
+  <g transform="translate(25 25) scale(.875)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M187 62 C153 35 104 47 92 89 C54 90 34 131 52 163 C20 190 31 239 66 255 C55 299 91 342 136 338 C167 336 188 316 188 286 V238" stroke="#111111" stroke-width="18"/>
+    <path d="M213 62 C247 35 296 47 308 89 C346 90 366 131 348 163 C380 190 369 239 334 255 C345 299 309 342 264 338 C233 336 212 316 212 286 V238" stroke="#111111" stroke-width="18"/>
+    <path d="M151 137 C134 123 112 136 112 157 V245 C112 268 139 279 155 260 C160 254 162 246 162 235" stroke="#111111" stroke-width="18"/>
+    <path d="M249 137 C266 123 288 136 288 157 V245 C288 268 261 279 245 260 C240 254 238 246 238 235" stroke="#111111" stroke-width="18"/>
+    <path d="M200 150 244 176 200 202 156 176Z" stroke="#111111" stroke-width="12"/>
+    <path d="M156 176v54l44 26 44-26v-54M200 202v54" stroke="#111111" stroke-width="12"/>
+    <path d="m156 211 44 26 44-26" stroke="#111111" stroke-width="12"/>
+    <circle cx="61" cy="255" r="11" fill="#FFFFFF" stroke="#FFC400" stroke-width="8"/>
+    <circle cx="310" cy="90" r="11" fill="#FFFFFF" stroke="#FFC400" stroke-width="8"/>
+  </g>
+</svg>
