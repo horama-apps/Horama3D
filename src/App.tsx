@@ -13,8 +13,10 @@ import {
   generateLampModelLocally,
 } from './generation/lampGenerator';
 import { generateClickerModelLocally } from './generation/clickerGenerator';
+import { generateHeadKeychainModelLocally } from './generation/headKeychainGenerator';
 import { generateUrnModelLocally } from './generation/urnGenerator';
 import { generateSignModel } from './generation/signGenerator';
+import { generatePetKeychainModel } from './generation/petKeychainGenerator';
 import { generateBraceletGemsModel } from './generation/braceletGenerator';
 import { generateTextureModelLocally } from './generation/textureGenerator';
 import { analyzeStlLocally } from './generation/stlValidation';
@@ -30,6 +32,7 @@ import { getDefaultParams, getProduct, products } from './products/catalog';
 import type {
   GeneratedModel,
   ModelBounds,
+  ModelObjectBounds,
   ProductParams,
   ProductType,
 } from './types';
@@ -48,9 +51,9 @@ interface Toast {
 
 const wipProductTypes: ProductType[] = ['keychains'];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
-  stl: ['lamp', 'urn', 'clicker', 'textures'],
+  stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
   image: ['keychains', 'image_layers'],
-  create: ['signs', 'bracelet_gems'],
+  create: ['signs', 'pet_keychains', 'bracelet_gems'],
 };
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
   stl: 'lamp',
@@ -63,7 +66,7 @@ function isWipProductType(type: ProductType): boolean {
 }
 
 function isLocalCreator(type: ProductType): boolean {
-  return type === 'signs' || type === 'bracelet_gems';
+  return type === 'signs' || type === 'pet_keychains' || type === 'bracelet_gems';
 }
 
 export function App() {
@@ -84,10 +87,12 @@ export function App() {
     lamp: getDefaultParams(getProduct('lamp')),
     urn: getDefaultParams(getProduct('urn')),
     clicker: getDefaultParams(getProduct('clicker')),
+    head_keychains: getDefaultParams(getProduct('head_keychains')),
     textures: getDefaultParams(getProduct('textures')),
     keychains: getDefaultParams(getProduct('keychains')),
     image_layers: getDefaultParams(getProduct('image_layers')),
     signs: getDefaultParams(getProduct('signs')),
+    pet_keychains: getDefaultParams(getProduct('pet_keychains')),
     bracelet_gems: getDefaultParams(getProduct('bracelet_gems')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
@@ -108,6 +113,7 @@ export function App() {
   const [shouldCollapseSetup, setShouldCollapseSetup] = useState(false);
   const [isCutPlaneDismissed, setIsCutPlaneDismissed] = useState(false);
   const [modelBounds, setModelBounds] = useState<ModelBounds | null>(null);
+  const [modelObjectBounds, setModelObjectBounds] = useState<ModelObjectBounds[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlRef = useRef<string | null>(null);
@@ -119,6 +125,7 @@ export function App() {
   const [signHolePositions, setSignHolePositions] = useState<
     Record<string, { u: number; v: number }>
   >({});
+  const [petHolePosition, setPetHolePosition] = useState({ u: 0.18, v: 0.72 });
 
   const params = paramsByType[productType];
   const visibleProducts = useMemo(
@@ -130,11 +137,16 @@ export function App() {
   );
   const isWipProduct = isWipProductType(productType);
   const requiresUploadedModel = !isLocalCreator(productType);
-  const isLocked = isWipProduct || (requiresUploadedModel && !isModelValidated);
-  const clickerCutHeightMin = modelBounds
-    ? roundToTenth(modelBounds.height * 0.2)
-    : 0;
-  const clickerCutHeightMax = modelBounds
+  const canUseInvalidStlForHead =
+    productType === 'head_keychains' && Boolean(uploadedFile);
+  const isLocked =
+    isWipProduct ||
+    (requiresUploadedModel && !isModelValidated && !canUseInvalidStlForHead);
+  const cutHeightMin =
+    modelBounds && productType === 'clicker'
+      ? roundToTenth(modelBounds.height * 0.2)
+      : 0;
+  const cutHeightMax = modelBounds
     ? roundToTenth(modelBounds.height * 0.8)
     : 1;
   const signMountingDepthMax = Math.min(
@@ -157,11 +169,49 @@ export function App() {
         string,
         { min?: number; max?: number; step?: number }
       > = {};
-      if (productType === 'clicker') {
+      if (productType === 'clicker' || productType === 'head_keychains') {
         overrides.cut_height_mm = {
-          min: clickerCutHeightMin,
-          max: clickerCutHeightMax,
+          min: cutHeightMin,
+          max: cutHeightMax,
           step: 0.1,
+        };
+      }
+      if (productType === 'head_keychains' && modelBounds) {
+        overrides.ring_outer_diameter_mm = {
+          min: 2,
+          max: Math.max(
+            2,
+            roundToTenth(Math.min(20, Math.min(modelBounds.width, modelBounds.depth) * 0.8)),
+          ),
+          step: 0.5,
+        };
+        overrides.ring_offset_x_mm = {
+          min: -roundDownToHalf(modelBounds.width / 2),
+          max: roundDownToHalf(modelBounds.width / 2),
+          step: 0.5,
+        };
+        overrides.ring_offset_y_mm = {
+          min: -roundDownToHalf(modelBounds.depth / 2),
+          max: roundDownToHalf(modelBounds.depth / 2),
+          step: 0.5,
+        };
+        overrides.head_hole_diameter_mm = {
+          min: 1.5,
+          max: Math.max(
+            1.5,
+            roundToTenth(Math.min(10, Math.min(modelBounds.width, modelBounds.height) * 0.45)),
+          ),
+          step: 0.5,
+        };
+        overrides.head_hole_offset_x_mm = {
+          min: -roundDownToHalf(modelBounds.width / 2),
+          max: roundDownToHalf(modelBounds.width / 2),
+          step: 0.5,
+        };
+        overrides.head_hole_offset_z_mm = {
+          min: -roundDownToHalf(modelBounds.height * 0.8),
+          max: 0,
+          step: 0.5,
         };
       }
       if (productType === 'signs') {
@@ -171,10 +221,38 @@ export function App() {
           step: 0.5,
         };
       }
+      if (productType === 'pet_keychains') {
+        overrides.keychain_hole_diameter_mm = {
+          min: 3,
+          max: Math.max(
+            3,
+            Math.min(10, Math.floor(Number(params.tag_width_mm ?? 60) * 0.3 * 2) / 2),
+          ),
+          step: 0.5,
+        };
+      }
       return Object.keys(overrides).length > 0 ? overrides : undefined;
     },
-    [clickerCutHeightMax, clickerCutHeightMin, productType, signMountingDepthMax],
+    [cutHeightMax, cutHeightMin, modelBounds, params.tag_width_mm, productType, signMountingDepthMax],
   );
+  const scaledModelIsVerySmall =
+    modelBounds !== null &&
+    Math.max(modelBounds.width, modelBounds.depth, modelBounds.height) < 20;
+  const paramDetails =
+    model?.source === 'upload' &&
+    modelBounds &&
+    (productType === 'clicker' || productType === 'head_keychains')
+      ? {
+          stl_scale_percent: [
+            t('params.stl_scale_percent.dimensions', {
+              dimensions: `${modelBounds.width.toFixed(1)} × ${modelBounds.depth.toFixed(1)} × ${modelBounds.height.toFixed(1)} mm`,
+            }),
+            scaledModelIsVerySmall
+              ? t('params.stl_scale_percent.smallWarning')
+              : '',
+          ].filter(Boolean).join(' · '),
+        }
+      : undefined;
 
   useEffect(() => {
     return () => {
@@ -240,7 +318,10 @@ export function App() {
     setModel(nextModel);
   };
 
-  const restoreUploadedModel = (nextStatus = t('status.stlReady')) => {
+  const restoreUploadedModel = (
+    nextStatus = t('status.stlReady'),
+    validated = isModelValidated,
+  ) => {
     if (!uploadedFile) return;
 
     const modelUrl = URL.createObjectURL(uploadedFile);
@@ -251,7 +332,7 @@ export function App() {
       downloadUrl: modelUrl,
       format: 'stl',
     });
-    setIsModelValidated(true);
+    setIsModelValidated(validated);
     setShouldCollapseSetup(false);
     setIsCutPlaneDismissed(false);
     setStatus(nextStatus);
@@ -292,16 +373,37 @@ export function App() {
         6200,
       );
     }
-    setParamsByType((current) => ({
-      ...current,
-      [productType]: {
+    if (
+      productType === 'pet_keychains' &&
+      ['pet_shape', 'tag_width_mm', 'keychain_hole_diameter_mm'].includes(key)
+    ) {
+      setPetHolePosition({ u: 0.18, v: 0.72 });
+    }
+    setParamsByType((current) => {
+      const nextProductParams = {
         ...current[productType],
         [key]: value,
-      },
-    }));
+      };
+      if (productType === 'pet_keychains' && key === 'tag_width_mm') {
+        const maximumHoleDiameter = Math.max(
+          3,
+          Math.min(10, Math.floor(Number(value) * 0.3 * 2) / 2),
+        );
+        nextProductParams.keychain_hole_diameter_mm = Math.min(
+          Number(nextProductParams.keychain_hole_diameter_mm),
+          maximumHoleDiameter,
+        );
+      }
+      return {
+        ...current,
+        [productType]: nextProductParams,
+      };
+    });
     setStatus(
       model?.source === 'upload'
-        ? t('status.stlReady')
+        ? isModelValidated
+          ? t('status.stlReady')
+          : t('status.invalidStlHeadKeychainReady')
         : t('status.parametersUpdated'),
     );
   };
@@ -309,19 +411,31 @@ export function App() {
   const handleModelBoundsChange = useCallback((bounds: ModelBounds | null) => {
     setModelBounds(bounds);
   }, []);
+  const handleModelObjectBoundsChange = useCallback(
+    (bounds: ModelObjectBounds[]) => {
+      setModelObjectBounds(bounds);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (isGenerating || isExporting) return;
     if (model?.source === 'local') {
       setStatus(t('status.generated'));
     } else if (model?.source === 'upload') {
-      setStatus(t('status.stlReady'));
+      setStatus(
+        isModelValidated
+          ? t('status.stlReady')
+          : t('status.invalidStlHeadKeychainReady'),
+      );
     } else if (configuratorMode === 'stl') {
       setStatus(t('status.loadStl'));
     } else if (configuratorMode === 'create') {
       setStatus(
         productType === 'bracelet_gems'
           ? t('status.configureBracelet')
+          : productType === 'pet_keychains'
+            ? t('status.configurePetKeychain')
           : t('status.configureSign'),
       );
     } else {
@@ -330,13 +444,20 @@ export function App() {
   }, [i18n.resolvedLanguage]);
 
   useEffect(() => {
-    if (productType !== 'clicker' || model?.source !== 'upload' || !modelBounds)
+    if (
+      (productType !== 'clicker' && productType !== 'head_keychains') ||
+      model?.source !== 'upload' ||
+      !modelBounds
+    )
       return;
 
-    const minCutHeight = roundToTenth(modelBounds.height * 0.2);
+    const minCutHeight =
+      productType === 'head_keychains'
+        ? 0
+        : roundToTenth(modelBounds.height * 0.2);
     const maxCutHeight = roundToTenth(modelBounds.height * 0.8);
     setParamsByType((current) => {
-      const currentValue = Number(current.clicker.cut_height_mm);
+      const currentValue = Number(current[productType].cut_height_mm);
       if (
         Number.isFinite(currentValue) &&
         currentValue >= minCutHeight &&
@@ -345,8 +466,8 @@ export function App() {
         return current;
       return {
         ...current,
-        clicker: {
-          ...current.clicker,
+        [productType]: {
+          ...current[productType],
           cut_height_mm: minCutHeight,
         },
       };
@@ -362,6 +483,8 @@ export function App() {
     setStatus(
       productType === 'signs'
         ? t('status.generatingSign')
+        : productType === 'pet_keychains'
+          ? t('status.generatingPetKeychain')
         : productType === 'bracelet_gems'
           ? t('status.generatingBracelet')
         : productType === 'image_layers'
@@ -370,6 +493,8 @@ export function App() {
           ? t('status.generatingLampLocal')
         : productType === 'clicker'
           ? t('status.generatingClickerLocal')
+        : productType === 'head_keychains'
+          ? t('status.generatingHeadKeychainLocal')
         : productType === 'textures'
           ? t('status.generatingTexturesLocal')
         : t('status.generatingUrnLocal'),
@@ -383,12 +508,19 @@ export function App() {
               ...params,
               mounting_hole_positions: JSON.stringify(signHolePositions),
             })
+          : productType === 'pet_keychains'
+            ? await generatePetKeychainModel({
+                ...params,
+                keychain_hole_position: JSON.stringify(petHolePosition),
+              })
           : productType === 'bracelet_gems'
             ? await generateBraceletGemsModel(params)
           : productType === 'lamp'
             ? await generateLampModelLocally(uploadedFile as File, params)
           : productType === 'clicker'
             ? await generateClickerModelLocally(uploadedFile as File, params)
+          : productType === 'head_keychains'
+            ? await generateHeadKeychainModelLocally(uploadedFile as File, params)
           : productType === 'textures'
             ? await generateTextureModelLocally(uploadedFile as File, params)
           : await generateUrnModelLocally(uploadedFile as File, params);
@@ -423,6 +555,25 @@ export function App() {
 
   const handleMountingHoleMove = useCallback(
     async (key: string, u: number, v: number) => {
+      if (productType === 'pet_keychains') {
+        const nextPosition = { u, v };
+        setPetHolePosition(nextPosition);
+        setIsGenerating(true);
+        setStatus(t('status.movingHole'));
+        try {
+          const generated = await generatePetKeychainModel({
+            ...params,
+            keychain_hole_position: JSON.stringify(nextPosition),
+          });
+          setActiveModel(generated);
+          setStatus(t('status.holeMoved'));
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : t('status.holeMoveFailed'));
+        } finally {
+          setIsGenerating(false);
+        }
+        return;
+      }
       if (productType !== 'signs' || params.sign_mode !== 'mounting_holes') return;
       const nextPositions = {
         ...signHolePositions,
@@ -449,6 +600,29 @@ export function App() {
     [params, productType, signHolePositions],
   );
 
+  const handleHeadKeychainAttachmentMove = useCallback(
+    (kind: 'exterior_ring' | 'integrated_hole', firstOffset: number, secondOffset: number) => {
+      if (productType !== 'head_keychains') return;
+      setParamsByType((current) => ({
+        ...current,
+        head_keychains: {
+          ...current.head_keychains,
+          ...(kind === 'integrated_hole'
+            ? {
+                head_hole_offset_x_mm: firstOffset,
+                head_hole_offset_z_mm: secondOffset,
+              }
+            : {
+                ring_offset_x_mm: firstOffset,
+                ring_offset_y_mm: secondOffset,
+              }),
+        },
+      }));
+      setStatus(t('status.attachmentMoved'));
+    },
+    [productType],
+  );
+
   const selectProduct = (nextType: ProductType) => {
     setProductType(nextType);
     setShouldCollapseSetup(false);
@@ -459,6 +633,8 @@ export function App() {
       setStatus(
         nextType === 'bracelet_gems'
           ? t('status.configureBracelet')
+          : nextType === 'pet_keychains'
+            ? t('status.configurePetKeychain')
           : nextType === 'signs'
             ? t('status.configureSign')
           : t('status.moduleWip'),
@@ -475,7 +651,11 @@ export function App() {
     }
 
     if (uploadedFile) {
-      restoreUploadedModel(t('status.stlReady'));
+      restoreUploadedModel(
+        isModelValidated
+          ? t('status.stlReady')
+          : t('status.invalidStlHeadKeychainReady'),
+      );
     } else {
       setActiveModel({ source: 'empty', format: 'stl' });
       setIsModelValidated(false);
@@ -493,9 +673,14 @@ export function App() {
     setIsCutPlaneDismissed(false);
     setHasUsedViewerActions(false);
     setSignHolePositions({});
+    setPetHolePosition({ u: 0.18, v: 0.72 });
 
     if (nextMode === 'stl' && uploadedFile) {
-      restoreUploadedModel(t('status.stlReady'));
+      restoreUploadedModel(
+        isModelValidated
+          ? t('status.stlReady')
+          : t('status.invalidStlHeadKeychainReady'),
+      );
       return;
     }
 
@@ -522,13 +707,21 @@ export function App() {
   const resetParams = () => {
     setHasUsedViewerActions(true);
     if (productType === 'signs') setSignHolePositions({});
+    if (productType === 'pet_keychains') setPetHolePosition({ u: 0.18, v: 0.72 });
     setParamsByType((current) => ({
       ...current,
       [productType]: getDefaultParams(product),
     }));
 
-    if (productType === 'clicker' && uploadedFile) {
-      restoreUploadedModel(t('status.stlReady'));
+    if (
+      (productType === 'clicker' || productType === 'head_keychains') &&
+      uploadedFile
+    ) {
+      restoreUploadedModel(
+        isModelValidated
+          ? t('status.stlReady')
+          : t('status.invalidStlHeadKeychainReady'),
+      );
       return;
     }
 
@@ -589,7 +782,19 @@ export function App() {
             title: analysis.message ?? t('messages.invalidStl'),
           });
         }
-        returnToDefaultState(t('messages.rejectedStl'));
+        const modelUrl = URL.createObjectURL(file);
+        setUploadedFile(file);
+        setActiveModel({
+          source: 'upload',
+          name: file.name,
+          modelUrl,
+          downloadUrl: modelUrl,
+          format: 'stl',
+        });
+        setIsModelValidated(false);
+        setShouldCollapseSetup(false);
+        setIsCutPlaneDismissed(false);
+        setStatus(t('status.invalidStlHeadKeychainReady'));
         return;
       }
 
@@ -787,10 +992,19 @@ export function App() {
               key={item.type}
               style={{ '--product-accent': item.accent } as React.CSSProperties}
               disabled={
-                isLocked &&
-                !isLocalCreator(item.type) &&
-                !isWipProductType(item.type) &&
-                !isWipProduct
+                (
+                  Boolean(uploadedFile) &&
+                  !isModelValidated &&
+                  item.type !== 'head_keychains' &&
+                  !isWipProductType(item.type)
+                ) ||
+                (
+                  isLocked &&
+                  !isLocalCreator(item.type) &&
+                  !isWipProductType(item.type) &&
+                  !isWipProduct &&
+                  !(item.type === 'head_keychains' && uploadedFile)
+                )
               }
               onClick={() => selectProduct(item.type)}
             >
@@ -920,7 +1134,9 @@ export function App() {
           model={isWipProduct ? { source: 'empty', format: 'stl' } : model}
           showCutPlane={!isGenerating && !isCutPlaneDismissed}
           onModelBoundsChange={handleModelBoundsChange}
+          onModelObjectBoundsChange={handleModelObjectBoundsChange}
           onMountingHoleMove={handleMountingHoleMove}
+          onHeadKeychainAttachmentMove={handleHeadKeychainAttachmentMove}
         />
         <div className='stage-statusbar' aria-live='polite'>
           <span>{status}</span>
@@ -947,7 +1163,9 @@ export function App() {
         params={params}
         disabled={isLocked}
         modelMetadata={model?.metadata}
+        modelObjectBounds={modelObjectBounds}
         paramOverrides={paramOverrides}
+        paramDetails={paramDetails}
         showMaterialControls={
           isLocalCreator(productType) ||
           productType === 'textures' ||
@@ -1078,6 +1296,10 @@ function LanguageMenu() {
 
 function roundToTenth(value: number): number {
   return Math.max(0, Math.round(value * 10) / 10);
+}
+
+function roundDownToHalf(value: number): number {
+  return Math.max(0, Math.floor(value * 2) / 2);
 }
 
 function playDuckDownloadSound() {

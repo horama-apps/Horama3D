@@ -5,6 +5,7 @@ interface ClickerWorkerResponse {
   bottom?: ArrayBuffer;
   top?: ArrayBuffer;
   cutHeightMm?: number;
+  scalePercent?: number;
   warnings?: string[];
   error?: string;
 }
@@ -43,6 +44,7 @@ export async function generateClickerModelLocally(
         topAssetUrl: `${baseUrl}clicker-assets/top-clicker.stl`,
         topSolidAssetUrl: `${baseUrl}clicker-assets/top-clicker-solid.stl`,
         params: {
+          scalePercent: boundedNumber(params.stl_scale_percent, 10, 200, 100),
           cutHeightMm: Number(params.cut_height_mm),
           baseProtrusionMm: boundedNumber(params.base_protrusion_mm, -10, 10, -2),
           partGapMm: 8,
@@ -70,7 +72,10 @@ export async function generateClickerModelLocally(
       format: 'stl',
       metadata: {
         objects: ['bottom', 'top'],
-        clicker: { cut_height_mm: response.cutHeightMm },
+        clicker: {
+          applied_scale: (response.scalePercent ?? 100) / 100,
+          cut_height_mm: response.cutHeightMm,
+        },
         warnings: response.warnings ?? [],
       },
     };

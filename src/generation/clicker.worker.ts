@@ -12,6 +12,7 @@ interface ClickerWorkerRequest {
   topAssetUrl: string;
   topSolidAssetUrl: string;
   params: {
+    scalePercent: number;
     cutHeightMm: number;
     baseProtrusionMm: number;
     partGapMm: number;
@@ -23,6 +24,7 @@ interface ClickerWorkerResponse {
   bottom?: ArrayBuffer;
   top?: ArrayBuffer;
   cutHeightMm?: number;
+  scalePercent?: number;
   warnings?: string[];
   error?: string;
 }
@@ -93,6 +95,11 @@ function generateClicker(
 } {
   let model = stlToManifold(wasm, input, 'El STL');
   try {
+    const scalePercent = params.scalePercent;
+    if (!Number.isFinite(scalePercent) || scalePercent < 10 || scalePercent > 200) {
+      throw new Error('La escala del STL debe estar entre 10 % y 200 %.');
+    }
+    model = replaceManifold(model, model.scale([scalePercent / 100, scalePercent / 100, scalePercent / 100]));
     model = moveBoundsMinimumToOrigin(model);
     const modelBounds = model.boundingBox();
     const height = modelBounds.max[2] - modelBounds.min[2];
@@ -162,6 +169,7 @@ function generateClicker(
       bottom: bottomStl,
       top: topStl,
       cutHeightMm: cutHeight,
+      scalePercent,
       warnings: ['El clicker fue procesado localmente en este navegador.'],
     };
   } finally {

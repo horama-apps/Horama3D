@@ -2,10 +2,12 @@ export type ProductType =
   | 'lamp'
   | 'urn'
   | 'clicker'
+  | 'head_keychains'
   | 'textures'
   | 'keychains'
   | 'image_layers'
   | 'signs'
+  | 'pet_keychains'
   | 'bracelet_gems';
 
 export type ParamKind = 'number' | 'boolean' | 'select' | 'text' | 'color';
@@ -77,6 +79,10 @@ export interface ModelBounds {
   height: number;
 }
 
+export interface ModelObjectBounds extends ModelBounds {
+  name: string;
+}
+
 export interface GeneratedModel {
   source: 'empty' | 'upload' | 'local';
   name?: string;
@@ -90,6 +96,7 @@ export interface GeneratedModel {
     lamp?: LampTransformInfo;
     urn?: UrnTransformInfo;
     clicker?: ClickerTransformInfo;
+    headKeychain?: HeadKeychainTransformInfo;
     imageLayers?: ImageLayersTransformInfo;
     mountingHoles?: Array<{
       key: string;
@@ -137,6 +144,12 @@ export interface UrnTransformInfo {
 }
 
 export interface ClickerTransformInfo {
+  applied_scale?: number;
+  cut_height_mm?: number;
+}
+
+export interface HeadKeychainTransformInfo {
+  applied_scale?: number;
   cut_height_mm?: number;
 }
 

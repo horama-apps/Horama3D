@@ -3,10 +3,12 @@ export const DEFAULT_COLOR = '#919191';
 export const LAMP_ACCENT_COLOR = '#d59a2f';
 export const URN_ACCENT_COLOR = '#2f8f83';
 export const CLICKER_ACCENT_COLOR = '#b6682f';
+export const HEAD_KEYCHAINS_ACCENT_COLOR = '#d16b87';
 export const TEXTURES_ACCENT_COLOR = '#6f6ad8';
 export const KEYCHAINS_ACCENT_COLOR = '#f2c94c';
 export const IMAGE_LAYERS_ACCENT_COLOR = '#3b82f6';
 export const SIGNS_ACCENT_COLOR = '#e53935';
+export const PET_KEYCHAINS_ACCENT_COLOR = '#e8794f';
 export const BRACELET_GEMS_ACCENT_COLOR = '#a855c7';
 
 export const KEYCHAIN_LOOP_RADIUS_MM = 5;

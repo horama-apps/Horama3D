@@ -989,6 +989,13 @@ a {
   accent-color: var(--accent);
 }
 
+.field .field-reference {
+  color: #73777a;
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
 .field input:disabled,
 .field select:disabled,
 .toggle-row input:disabled {

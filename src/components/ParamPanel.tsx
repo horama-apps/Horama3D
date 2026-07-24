@@ -4,11 +4,13 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type {
   GeneratedModel,
+  ModelObjectBounds,
   ParamDefinition,
   ProductDefinition,
   ProductParams,
   NumberParamDefinition,
   ClickerTransformInfo,
+  HeadKeychainTransformInfo,
   LampTransformInfo,
   UrnTransformInfo,
   ImageLayersTransformInfo,
@@ -19,7 +21,9 @@ interface ParamPanelProps {
   params: ProductParams;
   disabled?: boolean;
   modelMetadata?: GeneratedModel['metadata'];
+  modelObjectBounds?: ModelObjectBounds[];
   paramOverrides?: Record<string, Partial<Pick<NumberParamDefinition, 'min' | 'max' | 'step'>>>;
+  paramDetails?: Record<string, string>;
   showMaterialControls?: boolean;
   shouldCollapseSetup?: boolean;
   headerAction?: ReactNode;
@@ -31,7 +35,9 @@ export function ParamPanel({
   params,
   disabled = false,
   modelMetadata,
+  modelObjectBounds = [],
   paramOverrides = {},
+  paramDetails = {},
   showMaterialControls = false,
   shouldCollapseSetup = false,
   headerAction,
@@ -49,6 +55,8 @@ export function ParamPanel({
   const lampInfo = product.type === 'lamp' ? modelMetadata?.lamp : undefined;
   const urnInfo = product.type === 'urn' ? modelMetadata?.urn : undefined;
   const clickerInfo = product.type === 'clicker' ? modelMetadata?.clicker : undefined;
+  const headKeychainInfo =
+    product.type === 'head_keychains' ? modelMetadata?.headKeychain : undefined;
   const imageLayersInfo = product.type === 'image_layers' ? modelMetadata?.imageLayers : undefined;
   const transformInfoRows = lampInfo
     ? getLampInfoRows(lampInfo, t)
@@ -56,9 +64,13 @@ export function ParamPanel({
       ? getUrnInfoRows(urnInfo, t)
       : clickerInfo
         ? getClickerInfoRows(clickerInfo, t)
+        : headKeychainInfo
+          ? getHeadKeychainInfoRows(headKeychainInfo, t)
         : imageLayersInfo
           ? getImageLayersInfoRows(imageLayersInfo, t)
           : [];
+  const dimensionInfoRows = getDimensionInfoRows(modelObjectBounds, t);
+  const generalInfoRows = [...dimensionInfoRows, ...transformInfoRows];
   const colorParams = product.params.filter((param) => param.kind === 'color');
   const postProcessingParams =
     product.type === 'clicker'
@@ -84,8 +96,27 @@ export function ParamPanel({
       param.kind !== 'color' &&
       !postProcessingParams.some((postParam) => postParam.key === param.key),
   );
-  const visibleMainParams = mainParams.filter(
-    (param) =>
+  const visibleMainParams = mainParams.filter((param) => {
+    if (product.type === 'head_keychains') {
+      const exteriorParams = [
+        'ring_outer_diameter_mm',
+        'ring_offset_x_mm',
+        'ring_offset_y_mm',
+      ];
+      const holeParams = [
+        'head_hole_diameter_mm',
+        'head_hole_offset_x_mm',
+        'head_hole_offset_z_mm',
+      ];
+      if (exteriorParams.includes(param.key)) {
+        return params.head_keychain_attachment !== 'integrated_hole';
+      }
+      if (holeParams.includes(param.key)) {
+        return params.head_keychain_attachment === 'integrated_hole';
+      }
+      return true;
+    }
+    return (
       product.type !== 'signs' ||
       (!['wall_thickness_mm', 'wall_height_mm'].includes(param.key) &&
         !['mounting_hole_diameter_mm', 'mounting_hole_depth_mm'].includes(param.key) &&
@@ -93,8 +124,9 @@ export function ParamPanel({
       (['wall_thickness_mm', 'wall_height_mm', 'mirror_hollow'].includes(param.key) &&
         params.sign_mode === 'hollow') ||
       (['mounting_hole_diameter_mm', 'mounting_hole_depth_mm'].includes(param.key) &&
-        params.sign_mode === 'mounting_holes'),
-  );
+        params.sign_mode === 'mounting_holes')
+    );
+  });
   const visiblePostProcessingParams = postProcessingParams.filter(
     (param) =>
       product.type === 'signs' || product.type === 'textures'
@@ -132,9 +164,13 @@ export function ParamPanel({
           <h2>{productName}</h2>
           {headerAction}
         </div>
-        {product.type === 'clicker' && (
+        {(product.type === 'clicker' || product.type === 'head_keychains') && (
           <p className="parameter-note">
-            {t('notes.clickerReset')}
+            {t(
+              product.type === 'head_keychains'
+                ? 'notes.headKeychainReset'
+                : 'notes.clickerReset',
+            )}
           </p>
         )}
       </div>
@@ -155,6 +191,7 @@ export function ParamPanel({
                 value={params[param.key] ?? param.defaultValue}
                 disabled={disabled}
                 override={paramOverrides[param.key]}
+                detail={paramDetails[param.key]}
                 onChange={(value) => onChange(param.key, value)}
               />
             ))}
@@ -202,18 +239,18 @@ export function ParamPanel({
         </section>
       )}
 
-      {transformInfoRows.length > 0 && (
-        <section className="transform-info" aria-label={`${productName} — ${t('common.transformInfo')}`}>
+      {generalInfoRows.length > 0 && (
+        <section className="transform-info" aria-label={`${productName} — ${t('common.generalInfo')}`}>
           <CollapsibleHeading
-            label={t('common.transformInfo')}
+            label={t('common.generalInfo')}
             isOpen={openSections.transformInfo}
             onToggle={() => toggleSection('transformInfo')}
           />
           {openSections.transformInfo && (
             <>
               <dl>
-                {transformInfoRows.map((row) => (
-                  <div key={row.label}>
+                {generalInfoRows.map((row, index) => (
+                  <div key={`${row.label}-${index}`}>
                     <dt>{row.label}</dt>
                     <dd>{row.value}</dd>
                   </div>
@@ -264,14 +301,25 @@ interface ParamControlProps {
   value: ProductParams[string];
   disabled: boolean;
   override?: Partial<Pick<NumberParamDefinition, 'min' | 'max' | 'step'>>;
+  detail?: string;
   onChange: (value: ProductParams[string]) => void;
 }
 
-function ParamControl({ param, productType, value, disabled, override, onChange }: ParamControlProps) {
+function ParamControl({
+  param,
+  productType,
+  value,
+  disabled,
+  override,
+  detail,
+  onChange,
+}: ParamControlProps) {
   const { t } = useTranslation();
   const translationKey =
     productType === 'bracelet_gems' && param.key === 'text'
       ? 'bracelet_text'
+      : productType === 'pet_keychains' && param.key === 'text'
+        ? 'pet_name'
       : param.key;
   const label = t(`params.${translationKey}.label`, { defaultValue: param.label });
   const help = param.help
@@ -281,6 +329,8 @@ function ParamControl({ param, productType, value, disabled, override, onChange 
     ? t(param.key === 'text'
       ? productType === 'bracelet_gems'
         ? 'placeholders.braceletText'
+        : productType === 'pet_keychains'
+          ? 'placeholders.petName'
         : 'placeholders.signText'
       : 'placeholders.lidText', {
         defaultValue: param.placeholder,
@@ -434,6 +484,7 @@ function ParamControl({ param, productType, value, disabled, override, onChange 
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
       />
+      {detail && <small className="field-reference">{detail}</small>}
     </label>
   );
 }
@@ -522,6 +573,14 @@ function getUrnInfoRows(info: UrnTransformInfo, t: TFunction) {
 
 function getClickerInfoRows(info: ClickerTransformInfo, t: TFunction) {
   return [
+    { label: t('info.appliedScale'), value: formatInfoNumber(info.applied_scale) },
+    { label: t('info.cutHeight'), value: formatInfoNumber(info.cut_height_mm, 'mm') },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
+function getHeadKeychainInfoRows(info: HeadKeychainTransformInfo, t: TFunction) {
+  return [
+    { label: t('info.appliedScale'), value: formatInfoNumber(info.applied_scale) },
     { label: t('info.cutHeight'), value: formatInfoNumber(info.cut_height_mm, 'mm') },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 }
@@ -540,6 +599,24 @@ function getImageLayersInfoRows(info: ImageLayersTransformInfo, t: TFunction) {
     { label: t('info.physicalSize'), value: physicalSize },
     { label: t('info.layerHeight'), value: formatInfoNumber(info.layer_height_mm, 'mm') },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
+function getDimensionInfoRows(bounds: ModelObjectBounds[], t: TFunction) {
+  if (bounds.length === 0) return [];
+  if (bounds.length === 1) {
+    return [{
+      label: t('info.stlSize'),
+      value: formatDimensions(bounds[0]),
+    }];
+  }
+  return bounds.map((item, index) => ({
+    label: item.name.trim() || t('info.objectNumber', { number: index + 1 }),
+    value: formatDimensions(item),
+  }));
+}
+
+function formatDimensions(bounds: ModelObjectBounds): string {
+  return `${bounds.width.toFixed(1)} × ${bounds.depth.toFixed(1)} × ${bounds.height.toFixed(1)} mm`;
 }
 
 function formatInfoNumber(value: number | undefined, unit?: string): string | undefined {

@@ -5,7 +5,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import type { GeneratedModel, ModelBounds, ProductParams, ProductType } from '../types';
+import type {
+  GeneratedModel,
+  ModelBounds,
+  ModelObjectBounds,
+  ProductParams,
+  ProductType,
+} from '../types';
 import {
   DEFAULT_COLOR,
   KEYCHAIN_HOLE_RADIUS_MM,
@@ -22,7 +28,13 @@ interface Viewer3DProps {
   model: GeneratedModel | null;
   showCutPlane?: boolean;
   onModelBoundsChange?: (bounds: ModelBounds | null) => void;
+  onModelObjectBoundsChange?: (bounds: ModelObjectBounds[]) => void;
   onMountingHoleMove?: (key: string, u: number, v: number) => void;
+  onHeadKeychainAttachmentMove?: (
+    kind: 'exterior_ring' | 'integrated_hole',
+    firstOffset: number,
+    secondOffset: number,
+  ) => void;
 }
 
 export function Viewer3D({
@@ -31,7 +43,9 @@ export function Viewer3D({
   model,
   showCutPlane = false,
   onModelBoundsChange,
+  onModelObjectBoundsChange,
   onMountingHoleMove,
+  onHeadKeychainAttachmentMove,
 }: Viewer3DProps) {
   const { t } = useTranslation();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -39,6 +53,8 @@ export function Viewer3D({
   const [isMountingSideView, setIsMountingSideView] = useState(false);
   const onMountingHoleMoveRef = useRef(onMountingHoleMove);
   onMountingHoleMoveRef.current = onMountingHoleMove;
+  const onHeadKeychainAttachmentMoveRef = useRef(onHeadKeychainAttachmentMove);
+  onHeadKeychainAttachmentMoveRef.current = onHeadKeychainAttachmentMove;
   const materialKey =
     productType === 'lamp'
       ? `${params.body_color}|${params.base_color}`
@@ -46,9 +62,16 @@ export function Viewer3D({
       ? `${params.body_color}|${params.lid_color}|${params.text_color}`
       : productType === 'clicker'
         ? `${params.bottom_color}|${params.top_color}`
-        : productType === 'bracelet_gems'
+      : productType === 'bracelet_gems'
           ? String(params.body_color)
+        : productType === 'pet_keychains'
+          ? `${params.body_color}|${params.text_color}`
         : productType;
+  const uploadedStlScale =
+    (productType === 'clicker' || productType === 'head_keychains') &&
+    model?.source === 'upload'
+      ? THREE.MathUtils.clamp(Number(params.stl_scale_percent) || 100, 10, 200) / 100
+      : 1;
   const sceneRef = useRef<{
     scene: THREE.Scene;
     camera: THREE.PerspectiveCamera;
@@ -129,6 +152,7 @@ export function Viewer3D({
     const dragPoint = new THREE.Vector3();
     let draggedMarker: THREE.Mesh | null = null;
     let draggedPointerId: number | null = null;
+    const draggedStart = new THREE.Vector3();
 
     const updatePointer = (event: PointerEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
@@ -141,20 +165,37 @@ export function Viewer3D({
 
     const getMarkerAtPointer = (event: PointerEvent) => {
       updatePointer(event);
-      return raycaster.intersectObjects(mountingHolePreviewRoot.children, false)[0]
-        ?.object as THREE.Mesh | undefined;
+      const hit = raycaster.intersectObjects(
+        [...mountingHolePreviewRoot.children, ...keychainHoleRoot.children],
+        true,
+      )[0]?.object;
+      let candidate: THREE.Object3D | null = hit ?? null;
+      while (
+        candidate &&
+        !candidate.userData.mountingHoleKey &&
+        !candidate.userData.headAttachmentKind
+      ) {
+        candidate = candidate.parent;
+      }
+      return candidate instanceof THREE.Mesh ? candidate : undefined;
     };
 
     const onMarkerPointerDown = (event: PointerEvent) => {
       const marker = getMarkerAtPointer(event);
-      if (!marker?.userData.mountingHoleKey) return;
+      if (
+        !marker?.userData.mountingHoleKey &&
+        !marker?.userData.headAttachmentKind
+      ) return;
       event.preventDefault();
       event.stopPropagation();
       draggedMarker = marker;
+      draggedStart.copy(marker.position);
       draggedPointerId = event.pointerId;
       controls.enabled = false;
       dragPlane.setFromNormalAndCoplanarPoint(
-        new THREE.Vector3(0, 0, 1),
+        marker.userData.headAttachmentKind === 'integrated_hole'
+          ? new THREE.Vector3(0, 1, 0)
+          : new THREE.Vector3(0, 0, 1),
         marker.position,
       );
       renderer.domElement.setPointerCapture(event.pointerId);
@@ -170,6 +211,37 @@ export function Viewer3D({
       event.stopPropagation();
       updatePointer(event);
       if (!raycaster.ray.intersectPlane(dragPlane, dragPoint)) return;
+      const attachmentKind = draggedMarker.userData.headAttachmentKind as
+        | 'exterior_ring'
+        | 'integrated_hole'
+        | undefined;
+      if (attachmentKind) {
+        const bounds = draggedMarker.userData.headAttachmentBounds as {
+          minFirst: number;
+          maxFirst: number;
+          minSecond: number;
+          maxSecond: number;
+        };
+        draggedMarker.position.x = THREE.MathUtils.clamp(
+          dragPoint.x,
+          bounds.minFirst,
+          bounds.maxFirst,
+        );
+        if (attachmentKind === 'integrated_hole') {
+          draggedMarker.position.z = THREE.MathUtils.clamp(
+            dragPoint.z,
+            bounds.minSecond,
+            bounds.maxSecond,
+          );
+        } else {
+          draggedMarker.position.y = THREE.MathUtils.clamp(
+            dragPoint.y,
+            bounds.minSecond,
+            bounds.maxSecond,
+          );
+        }
+        return;
+      }
       const bounds = draggedMarker.userData.mountingHoleBounds as {
         minX: number;
         maxX: number;
@@ -193,6 +265,38 @@ export function Viewer3D({
       event.preventDefault();
       event.stopPropagation();
       const marker = draggedMarker;
+      const attachmentKind = marker.userData.headAttachmentKind as
+        | 'exterior_ring'
+        | 'integrated_hole'
+        | undefined;
+      if (attachmentKind) {
+        const initialOffsets = marker.userData.headAttachmentInitialOffsets as {
+          first: number;
+          second: number;
+        };
+        const first = initialOffsets.first + marker.position.x - draggedStart.x;
+        const second = initialOffsets.second + (
+          attachmentKind === 'integrated_hole'
+            ? marker.position.z - draggedStart.z
+            : marker.position.y - draggedStart.y
+        );
+        draggedMarker = null;
+        controls.enabled = true;
+        renderer.domElement.style.cursor = '';
+        if (
+          draggedPointerId !== null &&
+          renderer.domElement.hasPointerCapture(draggedPointerId)
+        ) {
+          renderer.domElement.releasePointerCapture(draggedPointerId);
+        }
+        draggedPointerId = null;
+        onHeadKeychainAttachmentMoveRef.current?.(
+          attachmentKind,
+          Math.round(first * 2) / 2,
+          Math.round(second * 2) / 2,
+        );
+        return;
+      }
       const bounds = marker.userData.mountingHoleBounds as {
         minX: number;
         maxX: number;
@@ -331,7 +435,11 @@ export function Viewer3D({
     const context = sceneRef.current;
     if (!context) return;
     clearGroup(context.mountingHolePreviewRoot);
-    if (!isMountingSideView || !model?.metadata?.mountingHoles) return;
+    const isPetKeychain = productType === 'pet_keychains';
+    if (
+      (!isMountingSideView && !isPetKeychain) ||
+      !model?.metadata?.mountingHoles
+    ) return;
 
     model.metadata.mountingHoles.forEach((hole) => {
       const marker = new THREE.Mesh(
@@ -360,14 +468,16 @@ export function Viewer3D({
       marker.position.set(
         hole.x + context.modelRoot.position.x,
         hole.y + context.modelRoot.position.y,
-        context.modelRoot.position.z - 0.08,
+        isPetKeychain
+          ? context.modelRoot.position.z + (liveBounds?.height ?? 0) + 0.08
+          : context.modelRoot.position.z - 0.08,
       );
       marker.userData.mountingHoleKey = hole.key;
       marker.userData.mountingHoleBounds = hole.bounds;
       marker.renderOrder = 20;
       context.mountingHolePreviewRoot.add(marker);
     });
-  }, [isMountingSideView, liveBounds, model]);
+  }, [isMountingSideView, liveBounds, model, productType]);
 
   useEffect(() => {
     const context = sceneRef.current;
@@ -377,6 +487,7 @@ export function Viewer3D({
     clearGroup(context.keychainHoleRoot);
     setLiveBounds(null);
     onModelBoundsChange?.(null);
+    onModelObjectBoundsChange?.([]);
     context.resizeGrid(null);
     context.modelRoot.position.set(0, 0, 0);
 
@@ -388,6 +499,7 @@ export function Viewer3D({
       const loader = new STLLoader();
       let loadedCount = 0;
       const expectedCount = model.previewFiles.length;
+      const objectBounds: ModelObjectBounds[] = [];
 
       model.previewFiles.forEach((previewFile) => {
         loader.load(previewFile.url, (geometry) => {
@@ -405,11 +517,18 @@ export function Viewer3D({
           mesh.name = previewFile.object ?? previewFile.role;
           mesh.userData.previewColor = previewFile.color;
           context.modelRoot.add(mesh);
+          objectBounds.push(
+            measureObjectBounds(
+              mesh,
+              previewFile.object ?? previewFile.filename ?? previewFile.role,
+            ),
+          );
           loadedCount += 1;
           if (loadedCount === expectedCount) {
             const bounds = context.frameModel();
             setLiveBounds(bounds);
             onModelBoundsChange?.(bounds);
+            onModelObjectBoundsChange?.(objectBounds);
           }
         });
       });
@@ -430,6 +549,15 @@ export function Viewer3D({
         const bounds = context.frameModel();
         setLiveBounds(bounds);
         onModelBoundsChange?.(bounds);
+        const objectBounds: ModelObjectBounds[] = [];
+        gltf.scene.updateWorldMatrix(true, true);
+        gltf.scene.traverse((node) => {
+          if (!(node instanceof THREE.Mesh)) return;
+          objectBounds.push(
+            measureObjectBounds(node, node.name || `object-${objectBounds.length + 1}`),
+          );
+        });
+        onModelObjectBoundsChange?.(objectBounds);
       });
       return;
     }
@@ -442,12 +570,22 @@ export function Viewer3D({
         geometry,
         createModelMaterial(productType, model.source, params),
       );
+      mesh.scale.setScalar(uploadedStlScale);
       context.modelRoot.add(mesh);
       const bounds = context.frameModel();
       setLiveBounds(bounds);
       onModelBoundsChange?.(bounds);
+      onModelObjectBoundsChange?.([
+        measureObjectBounds(mesh, model.name ?? `${productType}-model`),
+      ]);
     });
-  }, [model, onModelBoundsChange, productType]);
+  }, [
+    model,
+    onModelBoundsChange,
+    onModelObjectBoundsChange,
+    productType,
+    uploadedStlScale,
+  ]);
 
   useEffect(() => {
     const context = sceneRef.current;
@@ -464,7 +602,7 @@ export function Viewer3D({
     const cutHeight = Number(params.cut_height_mm);
     const shouldShowPlane =
       showCutPlane &&
-      productType === 'clicker' &&
+      (productType === 'clicker' || productType === 'head_keychains') &&
       model?.source === 'upload' &&
       bounds &&
       Number.isFinite(cutHeight);
@@ -483,27 +621,117 @@ export function Viewer3D({
 
     clearGroup(context.keychainHoleRoot);
     const bounds = liveBounds;
-    const angleDeg = Number(params.keychain_hole_angle_deg);
+    const isHeadKeychain = productType === 'head_keychains';
+    const isIntegratedHeadHole =
+      isHeadKeychain && params.head_keychain_attachment === 'integrated_hole';
+    const angleDeg = isHeadKeychain ? 0 : Number(params.keychain_hole_angle_deg);
     const shouldShowHole =
-      productType === 'clicker' &&
-      model?.source !== 'upload' &&
+      (productType === 'clicker' || isHeadKeychain) &&
       model?.source !== 'empty' &&
-      Boolean(params.keychain_hole) &&
+      (!isIntegratedHeadHole || model?.source === 'upload') &&
+      (isHeadKeychain || model?.source !== 'upload') &&
+      (isHeadKeychain || Boolean(params.keychain_hole)) &&
       bounds &&
       Number.isFinite(angleDeg);
 
     if (!shouldShowHole) return;
 
-    const placement = getKeychainPlacement(params.keychain_hole_placement);
+    const placement = isHeadKeychain
+      ? 'top'
+      : getKeychainPlacement(params.keychain_hole_placement);
     const target = getKeychainTarget(context.modelRoot, placement, angleDeg);
     if (!target) return;
+
+    if (isIntegratedHeadHole) {
+      const radius = THREE.MathUtils.clamp(
+        Number(params.head_hole_diameter_mm) || 3,
+        1.5,
+        10,
+      ) / 2;
+      const margin = Math.max(0.6, radius * 0.45);
+      const centerX = THREE.MathUtils.clamp(
+        target.bounds.getCenter(new THREE.Vector3()).x +
+          (Number(params.head_hole_offset_x_mm) || 0),
+        target.bounds.min.x + radius + margin,
+        target.bounds.max.x - radius - margin,
+      );
+      const centerZ = THREE.MathUtils.clamp(
+        target.bounds.max.z - radius - margin +
+          (Number(params.head_hole_offset_z_mm) || 0),
+        target.bounds.min.z + radius + margin,
+        target.bounds.max.z - radius - margin,
+      );
+      const marker = new THREE.Mesh(
+        new THREE.CircleGeometry(radius * 1.45, 40),
+        new THREE.MeshBasicMaterial({
+          color: 0xd94c43,
+          opacity: 0.24,
+          transparent: true,
+          depthTest: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(radius * 0.78, radius * 1.08, 40),
+        new THREE.MeshBasicMaterial({
+          color: 0xd94c43,
+          opacity: 0.96,
+          transparent: true,
+          depthTest: false,
+          side: THREE.DoubleSide,
+        }),
+      );
+      ring.position.z = 0.01;
+      marker.add(ring);
+      marker.rotation.x = Math.PI / 2;
+      marker.position.set(centerX, target.bounds.min.y - 0.12, centerZ);
+      marker.userData.headAttachmentKind = 'integrated_hole';
+      marker.userData.headAttachmentInitialOffsets = {
+        first: Number(params.head_hole_offset_x_mm) || 0,
+        second: Number(params.head_hole_offset_z_mm) || 0,
+      };
+      marker.userData.headAttachmentBounds = {
+        minFirst: target.bounds.min.x + radius + margin,
+        maxFirst: target.bounds.max.x - radius - margin,
+        minSecond: target.bounds.min.z + radius + margin,
+        maxSecond: target.bounds.max.z - radius - margin,
+      };
+      marker.renderOrder = 20;
+      context.keychainHoleRoot.add(marker);
+      return;
+    }
 
     const color =
       placement === 'top'
         ? getColorParam(params.top_color, DEFAULT_COLOR)
         : getColorParam(params.bottom_color, DEFAULT_COLOR);
-    const inset = Math.max(0, Number(params.keychain_hole_inset_mm) || 0);
-    const tab = createKeychainTab(target, angleDeg, inset, color);
+    const inset = isHeadKeychain
+      ? 0
+      : Math.max(0, Number(params.keychain_hole_inset_mm) || 0);
+    const tab = createKeychainTab(
+      target,
+      angleDeg,
+      inset,
+      color,
+      getKeychainLoopConfig(productType, params),
+    );
+    const draggableMesh = tab.children.find(
+      (child): child is THREE.Mesh => child instanceof THREE.Mesh,
+    );
+    if (isHeadKeychain && draggableMesh) {
+      const radius = getKeychainLoopConfig(productType, params).radius;
+      draggableMesh.userData.headAttachmentKind = 'exterior_ring';
+      draggableMesh.userData.headAttachmentInitialOffsets = {
+        first: Number(params.ring_offset_x_mm) || 0,
+        second: Number(params.ring_offset_y_mm) || 0,
+      };
+      draggableMesh.userData.headAttachmentBounds = {
+        minFirst: target.bounds.min.x - radius,
+        maxFirst: target.bounds.max.x + radius,
+        minSecond: target.bounds.min.y - radius,
+        maxSecond: target.bounds.max.y + radius,
+      };
+    }
     context.keychainHoleRoot.add(tab);
   }, [
     liveBounds,
@@ -513,6 +741,13 @@ export function Viewer3D({
     params.keychain_hole_angle_deg,
     params.keychain_hole_inset_mm,
     params.keychain_hole_placement,
+    params.head_hole_diameter_mm,
+    params.head_hole_offset_x_mm,
+    params.head_hole_offset_z_mm,
+    params.head_keychain_attachment,
+    params.ring_offset_x_mm,
+    params.ring_offset_y_mm,
+    params.ring_outer_diameter_mm,
     params.top_color,
     productType,
   ]);
@@ -583,11 +818,23 @@ interface KeychainMeshCandidate {
   score: number;
 }
 
+interface KeychainLoopConfig {
+  radius: number;
+  holeRadius: number;
+  thickness: number;
+  neckWidth: number;
+  neckLength: number;
+  overlap: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 function createKeychainTab(
   target: KeychainTarget,
   angleDeg: number,
   inset: number,
   color: THREE.ColorRepresentation,
+  config: KeychainLoopConfig,
 ): THREE.Group {
   const group = new THREE.Group();
   const angle = THREE.MathUtils.degToRad(angleDeg);
@@ -602,11 +849,13 @@ function createKeychainTab(
               .clone()
                   .multiplyScalar(
                     (target.supportDistance ?? 0) +
-                  KEYCHAIN_LOOP_RADIUS_MM -
-                  KEYCHAIN_LOOP_OVERLAP_MM -
+                  config.radius -
+                  config.overlap -
                   inset,
               ),
           );
+  loopCenter.x += config.offsetX;
+  loopCenter.y += config.offsetY;
   loopCenter.z = target.placement === 'top' ? target.z - inset : target.z;
   const material = new THREE.MeshStandardMaterial({
     color,
@@ -615,8 +864,8 @@ function createKeychainTab(
   });
 
   const keychain = new THREE.Mesh(
-    new THREE.ExtrudeGeometry(createKeychainShape(), {
-      depth: KEYCHAIN_THICKNESS_MM,
+    new THREE.ExtrudeGeometry(createKeychainShape(config), {
+      depth: config.thickness,
       bevelEnabled: false,
       curveSegments: 64,
       steps: 1,
@@ -626,7 +875,7 @@ function createKeychainTab(
   keychain.position.copy(loopCenter);
   if (target.placement === 'top') {
     keychain.rotation.x = Math.PI / 2;
-    keychain.position.z += KEYCHAIN_LOOP_RADIUS_MM;
+    keychain.position.z += config.radius;
   }
   if (target.placement === 'bottom') {
     keychain.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), direction.clone().negate());
@@ -637,22 +886,56 @@ function createKeychainTab(
   return group;
 }
 
-function createKeychainShape(): THREE.Shape {
-  const halfNeckWidth = KEYCHAIN_NECK_WIDTH_MM / 2;
-  const neckJoinY = -Math.sqrt(Math.max(0, KEYCHAIN_LOOP_RADIUS_MM ** 2 - halfNeckWidth ** 2));
+function createKeychainShape(config: KeychainLoopConfig): THREE.Shape {
+  const halfNeckWidth = config.neckWidth / 2;
+  const neckJoinY = -Math.sqrt(Math.max(0, config.radius ** 2 - halfNeckWidth ** 2));
   const rightJoinAngle = Math.atan2(neckJoinY, halfNeckWidth);
   const leftJoinAngle = Math.atan2(neckJoinY, -halfNeckWidth);
   const shape = new THREE.Shape();
   shape.moveTo(halfNeckWidth, neckJoinY);
-  shape.absarc(0, 0, KEYCHAIN_LOOP_RADIUS_MM, rightJoinAngle, leftJoinAngle, false);
-  shape.lineTo(-halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
-  shape.lineTo(halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
+  shape.absarc(0, 0, config.radius, rightJoinAngle, leftJoinAngle, false);
+  shape.lineTo(-halfNeckWidth, -config.radius - config.neckLength);
+  shape.lineTo(halfNeckWidth, -config.radius - config.neckLength);
   shape.lineTo(halfNeckWidth, neckJoinY);
 
   const holePath = new THREE.Path();
-  holePath.absarc(0, 0, KEYCHAIN_HOLE_RADIUS_MM, 0, Math.PI * 2, true);
+  holePath.absarc(0, 0, config.holeRadius, 0, Math.PI * 2, true);
   shape.holes.push(holePath);
   return shape;
+}
+
+function getKeychainLoopConfig(
+  productType: ProductType,
+  params: ProductParams,
+): KeychainLoopConfig {
+  if (productType === 'head_keychains') {
+    const diameter = THREE.MathUtils.clamp(
+      Number(params.ring_outer_diameter_mm) || 6,
+      2,
+      20,
+    );
+    const radius = diameter / 2;
+    return {
+      radius,
+      holeRadius: radius * 0.52,
+      thickness: diameter * 0.3,
+      neckWidth: radius * 1.18,
+      neckLength: radius * 1.28,
+      overlap: radius * 0.16,
+      offsetX: Number(params.ring_offset_x_mm) || 0,
+      offsetY: Number(params.ring_offset_y_mm) || 0,
+    };
+  }
+  return {
+    radius: KEYCHAIN_LOOP_RADIUS_MM,
+    holeRadius: KEYCHAIN_HOLE_RADIUS_MM,
+    thickness: KEYCHAIN_THICKNESS_MM,
+    neckWidth: KEYCHAIN_NECK_WIDTH_MM,
+    neckLength: KEYCHAIN_NECK_LENGTH_MM,
+    overlap: KEYCHAIN_LOOP_OVERLAP_MM,
+    offsetX: 0,
+    offsetY: 0,
+  };
 }
 
 function getKeychainTarget(
@@ -806,6 +1089,11 @@ function getMaterialColor(
   if (productType === 'bracelet_gems') {
     return getColorParam(params.body_color, '#b978d0');
   }
+  if (productType === 'pet_keychains') {
+    return role === 'text'
+      ? getColorParam(params.text_color, '#fff4dc')
+      : getColorParam(params.body_color, '#e8794f');
+  }
   if (productType !== 'urn') return getBaseModelColor(productType, source);
   if (role === 'text') return getColorParam(params.text_color, '#232629');
   if (role === 'lid') return getColorParam(params.lid_color, DEFAULT_COLOR);
@@ -872,6 +1160,21 @@ function getObjectNamePath(node: THREE.Object3D): string {
     current = current.parent;
   }
   return names.join(' ');
+}
+
+function measureObjectBounds(
+  object: THREE.Object3D,
+  name: string,
+): ModelObjectBounds {
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  return {
+    name: name.replace(/\.stl$/i, ''),
+    width: size.x,
+    depth: size.y,
+    height: size.z,
+  };
 }
 
 function clearGroup(group: THREE.Group) {

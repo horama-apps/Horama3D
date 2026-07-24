@@ -61,6 +61,17 @@ interface ParsedMesh {
 
 type KeychainPlacement = 'bottom' | 'top';
 
+interface KeychainLoopConfig {
+  radius: number;
+  holeRadius: number;
+  thickness: number;
+  neckWidth: number;
+  neckLength: number;
+  overlap: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 export async function exportModel(
   model: GeneratedModel,
   productType: ProductType,
@@ -305,7 +316,17 @@ function addKeychainLoopToClickerMeshes(
 ): AssignedMesh[] {
   if (!shouldAddKeychainLoop(productType, params)) return meshes;
 
-  const placement = getKeychainPlacement(params.keychain_hole_placement);
+  const isHeadKeychain = productType === 'head_keychains';
+  const placement = isHeadKeychain
+    ? 'top'
+    : getKeychainPlacement(params.keychain_hole_placement);
+  const loopParams = isHeadKeychain
+    ? {
+        ...params,
+        keychain_hole_angle_deg: 0,
+        keychain_hole_inset_mm: 0,
+      }
+    : params;
   const targetIndex = getClickerKeychainMeshIndex(meshes, placement);
   if (targetIndex < 0) return meshes;
 
@@ -313,7 +334,10 @@ function addKeychainLoopToClickerMeshes(
     index === targetIndex
       ? {
           ...mesh,
-          mesh: mergeMeshData(mesh.mesh, createKeychainLoopMesh(mesh.mesh, params, placement)),
+          mesh: mergeMeshData(
+            mesh.mesh,
+            createKeychainLoopMesh(mesh.mesh, loopParams, placement),
+          ),
         }
       : mesh,
   );
@@ -341,6 +365,9 @@ function getClickerKeychainMeshIndex(meshes: AssignedMesh[], placement: Keychain
 }
 
 function shouldAddKeychainLoop(productType: ProductType, params: ProductParams): boolean {
+  if (productType === 'head_keychains') {
+    return params.head_keychain_attachment !== 'integrated_hole';
+  }
   return (
     productType === 'clicker' &&
     Boolean(params.keychain_hole) &&
@@ -353,6 +380,7 @@ function createKeychainLoopMesh(
   params: ProductParams,
   placement: KeychainPlacement,
 ): MeshData {
+  const config = getKeychainLoopConfig(params);
   const bounds = baseMesh.bounds;
   const angle = THREE.MathUtils.degToRad(Number(params.keychain_hole_angle_deg));
   const direction = new THREE.Vector3(Math.cos(angle), Math.sin(angle), 0).normalize();
@@ -368,22 +396,24 @@ function createKeychainLoopMesh(
               .clone()
               .multiplyScalar(
                 slice.supportDistance +
-                  KEYCHAIN_LOOP_RADIUS_MM -
-                  KEYCHAIN_LOOP_OVERLAP_MM -
+                  config.radius -
+                  config.overlap -
                   inset,
               ),
           );
+  loopCenter.x += config.offsetX;
+  loopCenter.y += config.offsetY;
   loopCenter.z = placement === 'top' ? bounds.maxZ - inset : bounds.minZ;
 
-  const keychainGeometry = new THREE.ExtrudeGeometry(createKeychainShape(), {
-    depth: KEYCHAIN_THICKNESS_MM,
+  const keychainGeometry = new THREE.ExtrudeGeometry(createKeychainShape(config), {
+    depth: config.thickness,
     bevelEnabled: false,
     curveSegments: 64,
     steps: 1,
   });
   if (placement === 'top') {
     keychainGeometry.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-    loopCenter.z += KEYCHAIN_LOOP_RADIUS_MM;
+    loopCenter.z += config.radius;
   } else {
     keychainGeometry.applyMatrix4(
       new THREE.Matrix4().makeRotationFromQuaternion(
@@ -396,22 +426,54 @@ function createKeychainLoopMesh(
   return geometryToMeshData(keychainGeometry);
 }
 
-function createKeychainShape(): THREE.Shape {
-  const halfNeckWidth = KEYCHAIN_NECK_WIDTH_MM / 2;
-  const neckJoinY = -Math.sqrt(Math.max(0, KEYCHAIN_LOOP_RADIUS_MM ** 2 - halfNeckWidth ** 2));
+function createKeychainShape(config: KeychainLoopConfig): THREE.Shape {
+  const halfNeckWidth = config.neckWidth / 2;
+  const neckJoinY = -Math.sqrt(Math.max(0, config.radius ** 2 - halfNeckWidth ** 2));
   const rightJoinAngle = Math.atan2(neckJoinY, halfNeckWidth);
   const leftJoinAngle = Math.atan2(neckJoinY, -halfNeckWidth);
   const shape = new THREE.Shape();
   shape.moveTo(halfNeckWidth, neckJoinY);
-  shape.absarc(0, 0, KEYCHAIN_LOOP_RADIUS_MM, rightJoinAngle, leftJoinAngle, false);
-  shape.lineTo(-halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
-  shape.lineTo(halfNeckWidth, -KEYCHAIN_LOOP_RADIUS_MM - KEYCHAIN_NECK_LENGTH_MM);
+  shape.absarc(0, 0, config.radius, rightJoinAngle, leftJoinAngle, false);
+  shape.lineTo(-halfNeckWidth, -config.radius - config.neckLength);
+  shape.lineTo(halfNeckWidth, -config.radius - config.neckLength);
   shape.lineTo(halfNeckWidth, neckJoinY);
 
   const holePath = new THREE.Path();
-  holePath.absarc(0, 0, KEYCHAIN_HOLE_RADIUS_MM, 0, Math.PI * 2, true);
+  holePath.absarc(0, 0, config.holeRadius, 0, Math.PI * 2, true);
   shape.holes.push(holePath);
   return shape;
+}
+
+function getKeychainLoopConfig(params: ProductParams): KeychainLoopConfig {
+  const hasDynamicRing = Number.isFinite(Number(params.ring_outer_diameter_mm));
+  if (hasDynamicRing) {
+    const diameter = THREE.MathUtils.clamp(
+      Number(params.ring_outer_diameter_mm),
+      2,
+      20,
+    );
+    const radius = diameter / 2;
+    return {
+      radius,
+      holeRadius: radius * 0.52,
+      thickness: diameter * 0.3,
+      neckWidth: radius * 1.18,
+      neckLength: radius * 1.28,
+      overlap: radius * 0.16,
+      offsetX: Number(params.ring_offset_x_mm) || 0,
+      offsetY: Number(params.ring_offset_y_mm) || 0,
+    };
+  }
+  return {
+    radius: KEYCHAIN_LOOP_RADIUS_MM,
+    holeRadius: KEYCHAIN_HOLE_RADIUS_MM,
+    thickness: KEYCHAIN_THICKNESS_MM,
+    neckWidth: KEYCHAIN_NECK_WIDTH_MM,
+    neckLength: KEYCHAIN_NECK_LENGTH_MM,
+    overlap: KEYCHAIN_LOOP_OVERLAP_MM,
+    offsetX: 0,
+    offsetY: 0,
+  };
 }
 
 function getMeshSliceMetrics(
