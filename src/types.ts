@@ -41,6 +41,7 @@ export interface SelectParamDefinition extends BaseParamDefinition {
     preview?: string;
     previewAlt?: string;
     fontFamily?: string;
+    icon?: string;
   }>;
 }
 

@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import type { GeneratedModel, ProductParams, PreviewFile } from '../types';
+import {
+  loadReusableShape,
+  petShapeAssetByValue,
+} from '../shapes/reusableShapeLibrary';
 import { loadFont } from './signGenerator';
 
 interface HolePosition {
@@ -21,7 +25,11 @@ export async function generatePetKeychainModel(
   const maximumHoleDiameter = Math.max(3, Math.min(10, Math.floor(width * 0.3 * 2) / 2));
   const holeRadius =
     clampNumber(params.keychain_hole_diameter_mm, 5, 3, maximumHoleDiameter) / 2;
-  const sourceShape = createPetShape(String(params.pet_shape ?? 'bone'));
+  const shapeValue = String(params.pet_shape ?? 'bone');
+  const sourceShapes = await loadReusableShape(
+    petShapeAssetByValue[shapeValue] ?? 'bone',
+  );
+  const sourceShape = sourceShapes[0];
   const shapeBounds = getShapeBounds(sourceShape);
   const scale = width / Math.max(shapeBounds.width, 0.001);
   const shape = scaleShapes([sourceShape], scale)[0];
@@ -108,171 +116,6 @@ export async function generatePetKeychainModel(
       ],
     },
   };
-}
-
-function createPetShape(kind: string): THREE.Shape {
-  if (kind === 'fish') return createFishShape();
-  if (kind === 'cat') return createCatShape();
-  if (kind === 'dog') return createDogShape();
-  if (kind === 'paw') return createPawShape();
-  if (kind === 'heart') return createHeartShape();
-  if (kind === 'round') return createRoundShape();
-  if (kind === 'house') return createHouseShape();
-  if (kind === 'rabbit') return createRabbitShape();
-  if (kind === 'bird') return createBirdShape();
-  if (kind === 'turtle') return createTurtleShape();
-  if (kind === 'hamster') return createHamsterShape();
-  return createBoneShape();
-}
-
-function createBoneShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-24, -10);
-  shape.bezierCurveTo(-31, -17, -40, -9, -34, -2);
-  shape.bezierCurveTo(-42, 5, -32, 17, -24, 10);
-  shape.bezierCurveTo(-15, 7, 15, 7, 24, 10);
-  shape.bezierCurveTo(32, 17, 42, 5, 34, -2);
-  shape.bezierCurveTo(40, -9, 31, -17, 24, -10);
-  shape.bezierCurveTo(15, -7, -15, -7, -24, -10);
-  return shape;
-}
-
-function createFishShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-34, 0);
-  shape.lineTo(-45, 14);
-  shape.lineTo(-43, 1);
-  shape.lineTo(-45, -14);
-  shape.lineTo(-34, 0);
-  shape.bezierCurveTo(-18, 21, 17, 21, 34, 0);
-  shape.bezierCurveTo(17, -21, -18, -21, -34, 0);
-  return shape;
-}
-
-function createCatShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-27, 10);
-  shape.lineTo(-25, 30);
-  shape.lineTo(-11, 21);
-  shape.bezierCurveTo(-4, 24, 4, 24, 11, 21);
-  shape.lineTo(25, 30);
-  shape.lineTo(27, 10);
-  shape.bezierCurveTo(34, -10, 20, -30, 0, -31);
-  shape.bezierCurveTo(-20, -30, -34, -10, -27, 10);
-  return shape;
-}
-
-function createDogShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-18, 22);
-  shape.bezierCurveTo(-28, 31, -39, 22, -34, 7);
-  shape.lineTo(-29, -11);
-  shape.bezierCurveTo(-26, -20, -18, -17, -16, -10);
-  shape.bezierCurveTo(-10, -25, 10, -25, 16, -10);
-  shape.bezierCurveTo(18, -17, 26, -20, 29, -11);
-  shape.lineTo(34, 7);
-  shape.bezierCurveTo(39, 22, 28, 31, 18, 22);
-  shape.bezierCurveTo(8, 27, -8, 27, -18, 22);
-  return shape;
-}
-
-function createPawShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-18, -25);
-  shape.bezierCurveTo(-31, -19, -33, -4, -25, 5);
-  shape.bezierCurveTo(-32, 10, -31, 23, -23, 27);
-  shape.bezierCurveTo(-16, 30, -11, 24, -12, 17);
-  shape.bezierCurveTo(-11, 29, 1, 34, 8, 27);
-  shape.bezierCurveTo(13, 22, 10, 14, 5, 11);
-  shape.bezierCurveTo(15, 19, 27, 13, 26, 3);
-  shape.bezierCurveTo(25, -5, 17, -8, 11, -4);
-  shape.bezierCurveTo(20, -17, 8, -31, -1, -24);
-  shape.bezierCurveTo(-7, -31, -14, -30, -18, -25);
-  return shape;
-}
-
-function createHeartShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(0, -29);
-  shape.bezierCurveTo(-8, -19, -34, 1, -34, 16);
-  shape.bezierCurveTo(-34, 34, -10, 38, 0, 21);
-  shape.bezierCurveTo(10, 38, 34, 34, 34, 16);
-  shape.bezierCurveTo(34, 1, 8, -19, 0, -29);
-  return shape;
-}
-
-function createRoundShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.absarc(0, 0, 34, 0, Math.PI * 2, false);
-  return shape;
-}
-
-function createHouseShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-34, -28);
-  shape.lineTo(-34, 10);
-  shape.lineTo(-42, 10);
-  shape.lineTo(0, 38);
-  shape.lineTo(42, 10);
-  shape.lineTo(34, 10);
-  shape.lineTo(34, -28);
-  shape.bezierCurveTo(18, -34, -18, -34, -34, -28);
-  return shape;
-}
-
-function createRabbitShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-19, 16);
-  shape.bezierCurveTo(-32, 33, -29, 47, -20, 48);
-  shape.bezierCurveTo(-11, 48, -10, 31, -9, 23);
-  shape.bezierCurveTo(-3, 26, 3, 26, 9, 23);
-  shape.bezierCurveTo(10, 31, 11, 48, 20, 48);
-  shape.bezierCurveTo(29, 47, 32, 33, 19, 16);
-  shape.bezierCurveTo(34, 2, 27, -27, 0, -31);
-  shape.bezierCurveTo(-27, -27, -34, 2, -19, 16);
-  return shape;
-}
-
-function createBirdShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-38, -4);
-  shape.bezierCurveTo(-23, 0, -21, 18, -7, 24);
-  shape.bezierCurveTo(7, 30, 25, 20, 27, 7);
-  shape.lineTo(43, 1);
-  shape.lineTo(28, -5);
-  shape.bezierCurveTo(21, -24, -7, -29, -23, -15);
-  shape.lineTo(-39, -24);
-  shape.bezierCurveTo(-35, -15, -35, -10, -38, -4);
-  return shape;
-}
-
-function createTurtleShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-27, -17);
-  shape.lineTo(-39, -26);
-  shape.lineTo(-35, -12);
-  shape.bezierCurveTo(-49, -7, -48, 7, -35, 10);
-  shape.lineTo(-40, 24);
-  shape.lineTo(-25, 17);
-  shape.bezierCurveTo(-9, 30, 15, 28, 27, 15);
-  shape.lineTo(39, 22);
-  shape.lineTo(35, 9);
-  shape.bezierCurveTo(50, 5, 50, -6, 35, -10);
-  shape.lineTo(40, -24);
-  shape.lineTo(26, -17);
-  shape.bezierCurveTo(10, -29, -11, -29, -27, -17);
-  return shape;
-}
-
-function createHamsterShape(): THREE.Shape {
-  const shape = new THREE.Shape();
-  shape.moveTo(-21, 21);
-  shape.bezierCurveTo(-34, 33, -43, 18, -35, 6);
-  shape.bezierCurveTo(-42, -15, -25, -34, 0, -34);
-  shape.bezierCurveTo(25, -34, 42, -15, 35, 6);
-  shape.bezierCurveTo(43, 18, 34, 33, 21, 21);
-  shape.bezierCurveTo(10, 29, -10, 29, -21, 21);
-  return shape;
 }
 
 function findSafeHole(

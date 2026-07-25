@@ -12,6 +12,10 @@ import {
   TEXTURES_ACCENT_COLOR,
   URN_ACCENT_COLOR,
 } from '../config/constants';
+import {
+  braceletCharmOptions,
+  petKeychainShapeOptions,
+} from '../shapes/reusableShapeLibrary';
 
 const LETTER_FONT_OPTIONS = [
   { label: 'Helvetiker Bold', value: 'helvetiker_bold', fontFamily: 'Arial Black, sans-serif' },
@@ -634,20 +638,7 @@ export const products: ProductDefinition[] = [
         key: 'pet_shape',
         label: 'Shape',
         defaultValue: 'bone',
-        options: [
-          { label: 'Bone', value: 'bone' },
-          { label: 'Fish', value: 'fish' },
-          { label: 'Cat', value: 'cat' },
-          { label: 'Dog', value: 'dog' },
-          { label: 'Paw', value: 'paw' },
-          { label: 'Heart', value: 'heart' },
-          { label: 'Round tag', value: 'round' },
-          { label: 'Pet house', value: 'house' },
-          { label: 'Rabbit', value: 'rabbit' },
-          { label: 'Bird', value: 'bird' },
-          { label: 'Turtle', value: 'turtle' },
-          { label: 'Hamster', value: 'hamster' },
-        ],
+        options: petKeychainShapeOptions,
       },
       {
         kind: 'text',
@@ -795,6 +786,14 @@ export const products: ProductDefinition[] = [
         label: 'Cord stops',
         help: 'Adds one cord stop before and after the letters.',
         defaultValue: true,
+      },
+      {
+        kind: 'select',
+        key: 'bracelet_charms',
+        label: 'Threadable charms',
+        help: 'Add independent decorative pieces. They do not replace the cord stops.',
+        defaultValue: '{}',
+        options: braceletCharmOptions,
       },
       {
         kind: 'color',

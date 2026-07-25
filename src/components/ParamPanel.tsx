@@ -338,6 +338,19 @@ function ParamControl({
     : undefined;
   const optionLabel = (option: { label: string; value: string }) =>
     t(`options.${param.key}.${option.value}`, { defaultValue: option.label });
+  if (param.kind === 'select' && param.key === 'bracelet_charms') {
+    return (
+      <CharmQuantityControl
+        label={label}
+        help={help}
+        options={param.options}
+        value={String(value)}
+        disabled={disabled}
+        optionLabel={optionLabel}
+        onChange={onChange}
+      />
+    );
+  }
   if (param.kind === 'boolean') {
     return (
       <label className="toggle-row">
@@ -487,6 +500,105 @@ function ParamControl({
       {detail && <small className="field-reference">{detail}</small>}
     </label>
   );
+}
+
+function CharmQuantityControl({
+  label,
+  help,
+  options,
+  value,
+  disabled,
+  optionLabel,
+  onChange,
+}: {
+  label: string;
+  help?: string;
+  options: Array<{
+    label: string;
+    value: string;
+    icon?: string;
+    preview?: string;
+    previewAlt?: string;
+  }>;
+  value: string;
+  disabled: boolean;
+  optionLabel: (option: { label: string; value: string }) => string;
+  onChange: (value: string) => void;
+}) {
+  const quantities = parseCharmQuantities(value);
+  const updateQuantity = (key: string, amount: number) => {
+    const next = { ...quantities };
+    const quantity = Math.max(0, Math.min(9, (next[key] ?? 0) + amount));
+    if (quantity === 0) delete next[key];
+    else next[key] = quantity;
+    onChange(JSON.stringify(next));
+  };
+
+  return (
+    <fieldset className="charm-quantity-field" disabled={disabled}>
+      <legend>{label}</legend>
+      {help && <small>{help}</small>}
+      <div className="charm-quantity-grid">
+        {options.map((option) => {
+          const quantity = quantities[option.value] ?? 0;
+          const translatedLabel = optionLabel(option);
+          return (
+            <div
+              className={quantity > 0 ? 'charm-quantity-card active' : 'charm-quantity-card'}
+              key={option.value}
+            >
+              <span className="charm-icon" aria-hidden="true">
+                {option.preview ? (
+                  <img
+                    src={option.preview}
+                    alt={option.previewAlt ?? ''}
+                  />
+                ) : (
+                  option.icon ?? '◆'
+                )}
+              </span>
+              <span className="charm-label">{translatedLabel}</span>
+              <span className="charm-stepper">
+                <button
+                  type="button"
+                  aria-label={`− ${translatedLabel}`}
+                  disabled={disabled || quantity === 0}
+                  onClick={() => updateQuantity(option.value, -1)}
+                >
+                  −
+                </button>
+                <output aria-label={`${translatedLabel}: ${quantity}`}>{quantity}</output>
+                <button
+                  type="button"
+                  aria-label={`+ ${translatedLabel}`}
+                  disabled={disabled || quantity === 9}
+                  onClick={() => updateQuantity(option.value, 1)}
+                >
+                  +
+                </button>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function parseCharmQuantities(value: string): Record<string, number> {
+  try {
+    const parsed = JSON.parse(value) as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([key, item]) => {
+        const quantity = Math.floor(Number(item));
+        return Number.isFinite(quantity) && quantity > 0
+          ? [[key, Math.min(9, quantity)]]
+          : [];
+      }),
+    );
+  } catch {
+    return {};
+  }
 }
 
 function FontDropdown({
