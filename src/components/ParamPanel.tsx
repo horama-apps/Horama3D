@@ -106,7 +106,7 @@ export function ParamPanel({
   );
   const visibleMainParams = mainParams.filter((param) => {
     if (
-      product.type === 'wifi_sign' &&
+      (product.type === 'wifi_sign' || product.type === 'business_packages') &&
       param.key === 'wifi_password' &&
       params.wifi_security === 'nopass'
     ) {
@@ -118,6 +118,12 @@ export function ParamPanel({
       params.tip_jar_version === 'basic'
     ) {
       return false;
+    }
+    if (product.type === 'business_signage') {
+      if (param.key === 'back_text' && !params.double_sided) return false;
+      if (param.key === 'table_number' && params.signage_template !== 'table_number') {
+        return false;
+      }
     }
     if (product.type === 'head_keychains') {
       const exteriorParams = [
@@ -349,32 +355,41 @@ function ParamControl({
   const help = param.help
     ? t(`params.${param.key}.help`, { defaultValue: param.help })
     : undefined;
-  const placeholderKey =
-    productType === 'tip_jar'
-      ? param.key === 'business_name'
-        ? 'placeholders.businessName'
-        : param.key === 'tip_message'
-          ? 'placeholders.tipMessage'
-          : 'placeholders.qrUrl'
-      : productType === 'wifi_sign'
-        ? param.key === 'wifi_title'
-          ? 'placeholders.wifiTitle'
-          : param.key === 'wifi_label'
-            ? 'placeholders.wifiLabel'
-            : param.key === 'wifi_ssid'
-              ? 'placeholders.wifiSsid'
-              : 'placeholders.wifiPassword'
-      : param.key === 'text'
-        ? productType === 'bracelet_gems'
-          ? 'placeholders.braceletText'
-          : productType === 'pet_keychains'
-            ? 'placeholders.petName'
-            : 'placeholders.signText'
-        : 'placeholders.lidText';
+  let placeholderKey: string | undefined;
+  if (productType === 'tip_jar') {
+    placeholderKey = param.key === 'business_name'
+      ? 'placeholders.businessName'
+      : param.key === 'tip_message'
+        ? 'placeholders.tipMessage'
+        : 'placeholders.qrUrl';
+  } else if (
+    (productType === 'wifi_sign' || productType === 'business_packages') &&
+    ['wifi_title', 'wifi_label', 'wifi_ssid', 'wifi_password'].includes(param.key)
+  ) {
+    const wifiPlaceholderKeys: Record<string, string> = {
+      wifi_title: 'placeholders.wifiTitle',
+      wifi_label: 'placeholders.wifiLabel',
+      wifi_ssid: 'placeholders.wifiSsid',
+      wifi_password: 'placeholders.wifiPassword',
+    };
+    placeholderKey = wifiPlaceholderKeys[param.key];
+  } else if (param.key === 'text') {
+    placeholderKey = productType === 'bracelet_gems'
+      ? 'placeholders.braceletText'
+      : productType === 'pet_keychains'
+        ? 'placeholders.petName'
+        : 'placeholders.signText';
+  } else if (param.key === 'lid_text') {
+    placeholderKey = 'placeholders.lidText';
+  } else if (param.key === 'business_name') {
+    placeholderKey = 'placeholders.businessName';
+  } else if (['qr_url', 'secondary_qr_url', 'tertiary_qr_url'].includes(param.key)) {
+    placeholderKey = 'placeholders.qrUrl';
+  }
   const placeholder = param.kind === 'text'
-    ? t(placeholderKey, {
-        defaultValue: param.placeholder,
-      })
+    ? placeholderKey
+      ? t(placeholderKey, { defaultValue: param.placeholder })
+      : param.placeholder
     : undefined;
   const optionLabel = (option: { label: string; value: string }) =>
     t(`options.${param.key}.${option.value}`, { defaultValue: option.label });

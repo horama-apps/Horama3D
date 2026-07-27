@@ -516,6 +516,9 @@ export function Viewer3D({
           );
           mesh.name = previewFile.object ?? previewFile.role;
           mesh.userData.previewColor = previewFile.color;
+          if (previewFile.previewPosition) {
+            mesh.position.fromArray(previewFile.previewPosition);
+          }
           context.modelRoot.add(mesh);
           objectBounds.push(
             measureObjectBounds(

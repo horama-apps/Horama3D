@@ -20,6 +20,13 @@ import { generatePetKeychainModel } from './generation/petKeychainGenerator';
 import { generateBraceletGemsModel } from './generation/braceletGenerator';
 import { generateTipJarModel } from './generation/tipJarGenerator';
 import { generateWifiSignModel } from './generation/wifiSignGenerator';
+import {
+  generateBusinessKeychainModel,
+  generateBusinessPackageModel,
+  generateBusinessSignageModel,
+  generateDisplayAccessoryModel,
+  generateQrSignModel,
+} from './generation/businessProductGenerator';
 import { generateTextureModelLocally } from './generation/textureGenerator';
 import { analyzeStlLocally } from './generation/stlValidation';
 import { generateImageLayersLocally } from './generation/imageLayersGenerator';
@@ -51,16 +58,51 @@ interface Toast {
   messages?: string[];
 }
 
-const wipProductTypes: ProductType[] = ['keychains'];
+const wipProductTypes: ProductType[] = [];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
   stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
-  image: ['keychains', 'image_layers'],
-  create: ['signs', 'pet_keychains', 'bracelet_gems', 'tip_jar', 'wifi_sign'],
+  image: ['image_layers'],
+  create: [
+    'signs',
+    'business_signage',
+    'qr_sign',
+    'wifi_sign',
+    'keychains',
+    'pet_keychains',
+    'bracelet_gems',
+    'tip_jar',
+    'display_accessories',
+    'business_packages',
+  ],
 };
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
   stl: 'lamp',
   image: 'image_layers',
   create: 'signs',
+};
+const configureStatusByProduct: Partial<Record<ProductType, string>> = {
+  signs: 'status.configureSign',
+  pet_keychains: 'status.configurePetKeychain',
+  bracelet_gems: 'status.configureBracelet',
+  tip_jar: 'status.configureTipJar',
+  wifi_sign: 'status.configureWifiSign',
+  qr_sign: 'status.configureQrSign',
+  business_signage: 'status.configureBusinessSignage',
+  keychains: 'status.configureBusinessKeychain',
+  display_accessories: 'status.configureDisplayAccessory',
+  business_packages: 'status.configureBusinessPackage',
+};
+const generatingStatusByProduct: Partial<Record<ProductType, string>> = {
+  signs: 'status.generatingSign',
+  pet_keychains: 'status.generatingPetKeychain',
+  bracelet_gems: 'status.generatingBracelet',
+  tip_jar: 'status.generatingTipJar',
+  wifi_sign: 'status.generatingWifiSign',
+  qr_sign: 'status.generatingQrSign',
+  business_signage: 'status.generatingBusinessSignage',
+  keychains: 'status.generatingBusinessKeychain',
+  display_accessories: 'status.generatingDisplayAccessory',
+  business_packages: 'status.generatingBusinessPackage',
 };
 
 function isWipProductType(type: ProductType): boolean {
@@ -73,7 +115,12 @@ function isLocalCreator(type: ProductType): boolean {
     type === 'pet_keychains' ||
     type === 'bracelet_gems' ||
     type === 'tip_jar' ||
-    type === 'wifi_sign'
+    type === 'wifi_sign' ||
+    type === 'qr_sign' ||
+    type === 'business_signage' ||
+    type === 'keychains' ||
+    type === 'display_accessories' ||
+    type === 'business_packages'
   );
 }
 
@@ -104,6 +151,10 @@ export function App() {
     bracelet_gems: getDefaultParams(getProduct('bracelet_gems')),
     tip_jar: getDefaultParams(getProduct('tip_jar')),
     wifi_sign: getDefaultParams(getProduct('wifi_sign')),
+    qr_sign: getDefaultParams(getProduct('qr_sign')),
+    business_signage: getDefaultParams(getProduct('business_signage')),
+    display_accessories: getDefaultParams(getProduct('display_accessories')),
+    business_packages: getDefaultParams(getProduct('business_packages')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
     source: 'empty',
@@ -441,17 +492,7 @@ export function App() {
     } else if (configuratorMode === 'stl') {
       setStatus(t('status.loadStl'));
     } else if (configuratorMode === 'create') {
-      setStatus(
-        productType === 'wifi_sign'
-          ? t('status.configureWifiSign')
-        : productType === 'tip_jar'
-          ? t('status.configureTipJar')
-        : productType === 'bracelet_gems'
-          ? t('status.configureBracelet')
-          : productType === 'pet_keychains'
-            ? t('status.configurePetKeychain')
-          : t('status.configureSign'),
-      );
+      setStatus(t(configureStatusByProduct[productType] ?? 'status.configureSign'));
     } else {
       setStatus(uploadedImageFile ? t('status.imageReady') : t('status.loadImage'));
     }
@@ -495,16 +536,8 @@ export function App() {
     setIsCutPlaneDismissed(true);
     setIsGenerating(true);
     setStatus(
-      productType === 'signs'
-        ? t('status.generatingSign')
-        : productType === 'pet_keychains'
-          ? t('status.generatingPetKeychain')
-        : productType === 'tip_jar'
-          ? t('status.generatingTipJar')
-        : productType === 'wifi_sign'
-          ? t('status.generatingWifiSign')
-        : productType === 'bracelet_gems'
-          ? t('status.generatingBracelet')
+      generatingStatusByProduct[productType]
+        ? t(generatingStatusByProduct[productType] as string)
         : productType === 'image_layers'
           ? t('status.generatingImageLayersLocal')
         : productType === 'lamp'
@@ -535,6 +568,16 @@ export function App() {
             ? await generateTipJarModel(params)
           : productType === 'wifi_sign'
             ? await generateWifiSignModel(params)
+          : productType === 'qr_sign'
+            ? await generateQrSignModel(params)
+          : productType === 'business_signage'
+            ? await generateBusinessSignageModel(params)
+          : productType === 'keychains'
+            ? await generateBusinessKeychainModel(params)
+          : productType === 'display_accessories'
+            ? await generateDisplayAccessoryModel(params)
+          : productType === 'business_packages'
+            ? await generateBusinessPackageModel(params)
           : productType === 'bracelet_gems'
             ? await generateBraceletGemsModel(params)
           : productType === 'lamp'
@@ -652,19 +695,7 @@ export function App() {
 
     if (isLocalCreator(nextType) || isWipProductType(nextType)) {
       setActiveModel({ source: 'empty', format: 'stl' });
-      setStatus(
-        nextType === 'wifi_sign'
-          ? t('status.configureWifiSign')
-        : nextType === 'tip_jar'
-          ? t('status.configureTipJar')
-        : nextType === 'bracelet_gems'
-          ? t('status.configureBracelet')
-          : nextType === 'pet_keychains'
-            ? t('status.configurePetKeychain')
-          : nextType === 'signs'
-            ? t('status.configureSign')
-          : t('status.moduleWip'),
-      );
+      setStatus(t(configureStatusByProduct[nextType] ?? 'status.moduleWip'));
       return;
     }
 
@@ -883,14 +914,18 @@ export function App() {
     setStatus(
       requestedFormat === '3mf'
         ? t('status.preparing3mf')
-        : isLocalCreator(productType)
+        : isLocalCreator(productType) &&
+            (!model.previewFiles || model.previewFiles.length <= 1)
           ? t('status.preparingStl')
           : t('status.preparingZip'),
     );
 
     try {
       let exported: { blob: Blob; filename: string };
-      if (isLocalCreator(productType)) {
+      if (
+        isLocalCreator(productType) &&
+        (!model.previewFiles || model.previewFiles.length <= 1)
+      ) {
         let localBlob = model.blob;
         if (!localBlob) {
           const response = await fetch(model.downloadUrl ?? model.modelUrl ?? '');

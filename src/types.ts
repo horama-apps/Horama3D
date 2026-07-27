@@ -10,7 +10,11 @@ export type ProductType =
   | 'pet_keychains'
   | 'bracelet_gems'
   | 'tip_jar'
-  | 'wifi_sign';
+  | 'wifi_sign'
+  | 'qr_sign'
+  | 'business_signage'
+  | 'display_accessories'
+  | 'business_packages';
 
 export type ParamKind = 'number' | 'boolean' | 'select' | 'text' | 'color';
 
@@ -125,6 +129,7 @@ export interface PreviewFile {
   url: string;
   format: 'stl' | '3mf' | 'glb';
   color?: string;
+  previewPosition?: [number, number, number];
 }
 
 export interface LampTransformInfo {
