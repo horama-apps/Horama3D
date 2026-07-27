@@ -8,6 +8,8 @@ Web configurator for loading STL files, applying product-specific transformation
 - Browser-local generators isolated in workers for lamps, urns, clickers, and textures.
 - Local image-to-layers generation with palette reduction, printable backfill sheets, frames, and colored 3MF export.
 - Local creators for signs and Bracelet Gems.
+- Configurable tip jars with standard and premium dimensions, removable lids,
+  raised branding, scannable QR geometry, and NFC placement markers.
 - Urn generation with a silhouette cavity, lid-rest ring, pressure lid, and four retaining ribs.
 - STL, ZIP, and 3MF exports without a generation backend.
 

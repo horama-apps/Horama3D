@@ -18,6 +18,7 @@ import { generateUrnModelLocally } from './generation/urnGenerator';
 import { generateSignModel } from './generation/signGenerator';
 import { generatePetKeychainModel } from './generation/petKeychainGenerator';
 import { generateBraceletGemsModel } from './generation/braceletGenerator';
+import { generateTipJarModel } from './generation/tipJarGenerator';
 import { generateTextureModelLocally } from './generation/textureGenerator';
 import { analyzeStlLocally } from './generation/stlValidation';
 import { generateImageLayersLocally } from './generation/imageLayersGenerator';
@@ -53,7 +54,7 @@ const wipProductTypes: ProductType[] = ['keychains'];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
   stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
   image: ['keychains', 'image_layers'],
-  create: ['signs', 'pet_keychains', 'bracelet_gems'],
+  create: ['signs', 'pet_keychains', 'bracelet_gems', 'tip_jar'],
 };
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
   stl: 'lamp',
@@ -66,7 +67,12 @@ function isWipProductType(type: ProductType): boolean {
 }
 
 function isLocalCreator(type: ProductType): boolean {
-  return type === 'signs' || type === 'pet_keychains' || type === 'bracelet_gems';
+  return (
+    type === 'signs' ||
+    type === 'pet_keychains' ||
+    type === 'bracelet_gems' ||
+    type === 'tip_jar'
+  );
 }
 
 export function App() {
@@ -94,6 +100,7 @@ export function App() {
     signs: getDefaultParams(getProduct('signs')),
     pet_keychains: getDefaultParams(getProduct('pet_keychains')),
     bracelet_gems: getDefaultParams(getProduct('bracelet_gems')),
+    tip_jar: getDefaultParams(getProduct('tip_jar')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
     source: 'empty',
@@ -432,7 +439,9 @@ export function App() {
       setStatus(t('status.loadStl'));
     } else if (configuratorMode === 'create') {
       setStatus(
-        productType === 'bracelet_gems'
+        productType === 'tip_jar'
+          ? t('status.configureTipJar')
+        : productType === 'bracelet_gems'
           ? t('status.configureBracelet')
           : productType === 'pet_keychains'
             ? t('status.configurePetKeychain')
@@ -485,6 +494,8 @@ export function App() {
         ? t('status.generatingSign')
         : productType === 'pet_keychains'
           ? t('status.generatingPetKeychain')
+        : productType === 'tip_jar'
+          ? t('status.generatingTipJar')
         : productType === 'bracelet_gems'
           ? t('status.generatingBracelet')
         : productType === 'image_layers'
@@ -513,6 +524,8 @@ export function App() {
                 ...params,
                 keychain_hole_position: JSON.stringify(petHolePosition),
               })
+          : productType === 'tip_jar'
+            ? await generateTipJarModel(params)
           : productType === 'bracelet_gems'
             ? await generateBraceletGemsModel(params)
           : productType === 'lamp'
@@ -631,7 +644,9 @@ export function App() {
     if (isLocalCreator(nextType) || isWipProductType(nextType)) {
       setActiveModel({ source: 'empty', format: 'stl' });
       setStatus(
-        nextType === 'bracelet_gems'
+        nextType === 'tip_jar'
+          ? t('status.configureTipJar')
+        : nextType === 'bracelet_gems'
           ? t('status.configureBracelet')
           : nextType === 'pet_keychains'
             ? t('status.configurePetKeychain')

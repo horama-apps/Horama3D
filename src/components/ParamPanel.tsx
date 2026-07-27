@@ -72,6 +72,14 @@ export function ParamPanel({
   const dimensionInfoRows = getDimensionInfoRows(modelObjectBounds, t);
   const generalInfoRows = [...dimensionInfoRows, ...transformInfoRows];
   const colorParams = product.params.filter((param) => param.kind === 'color');
+  const visibleColorParams = colorParams.filter(
+    (param) =>
+      !(
+        product.type === 'tip_jar' &&
+        params.tip_jar_version === 'basic' &&
+        param.key === 'qr_color'
+      ),
+  );
   const postProcessingParams =
     product.type === 'clicker'
       ? product.params.filter((param) =>
@@ -97,6 +105,13 @@ export function ParamPanel({
       !postProcessingParams.some((postParam) => postParam.key === param.key),
   );
   const visibleMainParams = mainParams.filter((param) => {
+    if (
+      product.type === 'tip_jar' &&
+      param.key === 'qr_url' &&
+      params.tip_jar_version === 'basic'
+    ) {
+      return false;
+    }
     if (product.type === 'head_keychains') {
       const exteriorParams = [
         'ring_outer_diameter_mm',
@@ -141,7 +156,7 @@ export function ParamPanel({
   const shouldShowPostProcessingSection =
     showMaterialControls &&
     (colorParams.length > 0 || visiblePostProcessingParams.length > 0);
-  const hasVisibleColors = showMaterialControls && colorParams.length > 0;
+  const hasVisibleColors = showMaterialControls && visibleColorParams.length > 0;
 
   useEffect(() => {
     setOpenSections((current) => ({
@@ -212,7 +227,7 @@ export function ParamPanel({
           />
           {openSections.materials && (
             <div className="controls color-controls">
-              {hasVisibleColors && colorParams.map((param) => (
+              {hasVisibleColors && visibleColorParams.map((param) => (
                 <ParamControl
                   key={param.key}
                   param={param}
@@ -325,14 +340,22 @@ function ParamControl({
   const help = param.help
     ? t(`params.${param.key}.help`, { defaultValue: param.help })
     : undefined;
+  const placeholderKey =
+    productType === 'tip_jar'
+      ? param.key === 'business_name'
+        ? 'placeholders.businessName'
+        : param.key === 'tip_message'
+          ? 'placeholders.tipMessage'
+          : 'placeholders.qrUrl'
+      : param.key === 'text'
+        ? productType === 'bracelet_gems'
+          ? 'placeholders.braceletText'
+          : productType === 'pet_keychains'
+            ? 'placeholders.petName'
+            : 'placeholders.signText'
+        : 'placeholders.lidText';
   const placeholder = param.kind === 'text'
-    ? t(param.key === 'text'
-      ? productType === 'bracelet_gems'
-        ? 'placeholders.braceletText'
-        : productType === 'pet_keychains'
-          ? 'placeholders.petName'
-        : 'placeholders.signText'
-      : 'placeholders.lidText', {
+    ? t(placeholderKey, {
         defaultValue: param.placeholder,
       })
     : undefined;

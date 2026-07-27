@@ -10,6 +10,7 @@ export const IMAGE_LAYERS_ACCENT_COLOR = '#3b82f6';
 export const SIGNS_ACCENT_COLOR = '#e53935';
 export const PET_KEYCHAINS_ACCENT_COLOR = '#e8794f';
 export const BRACELET_GEMS_ACCENT_COLOR = '#a855c7';
+export const TIP_JAR_ACCENT_COLOR = '#d5b72f';
 
 export const KEYCHAIN_LOOP_RADIUS_MM = 5;
 export const KEYCHAIN_HOLE_RADIUS_MM = KEYCHAIN_LOOP_RADIUS_MM * 0.52;

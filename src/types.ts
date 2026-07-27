@@ -8,7 +8,8 @@ export type ProductType =
   | 'image_layers'
   | 'signs'
   | 'pet_keychains'
-  | 'bracelet_gems';
+  | 'bracelet_gems'
+  | 'tip_jar';
 
 export type ParamKind = 'number' | 'boolean' | 'select' | 'text' | 'color';
 
