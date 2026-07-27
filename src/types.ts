@@ -9,7 +9,8 @@ export type ProductType =
   | 'signs'
   | 'pet_keychains'
   | 'bracelet_gems'
-  | 'tip_jar';
+  | 'tip_jar'
+  | 'wifi_sign';
 
 export type ParamKind = 'number' | 'boolean' | 'select' | 'text' | 'color';
 

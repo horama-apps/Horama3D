@@ -19,6 +19,7 @@ import { generateSignModel } from './generation/signGenerator';
 import { generatePetKeychainModel } from './generation/petKeychainGenerator';
 import { generateBraceletGemsModel } from './generation/braceletGenerator';
 import { generateTipJarModel } from './generation/tipJarGenerator';
+import { generateWifiSignModel } from './generation/wifiSignGenerator';
 import { generateTextureModelLocally } from './generation/textureGenerator';
 import { analyzeStlLocally } from './generation/stlValidation';
 import { generateImageLayersLocally } from './generation/imageLayersGenerator';
@@ -54,7 +55,7 @@ const wipProductTypes: ProductType[] = ['keychains'];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
   stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
   image: ['keychains', 'image_layers'],
-  create: ['signs', 'pet_keychains', 'bracelet_gems', 'tip_jar'],
+  create: ['signs', 'pet_keychains', 'bracelet_gems', 'tip_jar', 'wifi_sign'],
 };
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
   stl: 'lamp',
@@ -71,7 +72,8 @@ function isLocalCreator(type: ProductType): boolean {
     type === 'signs' ||
     type === 'pet_keychains' ||
     type === 'bracelet_gems' ||
-    type === 'tip_jar'
+    type === 'tip_jar' ||
+    type === 'wifi_sign'
   );
 }
 
@@ -101,6 +103,7 @@ export function App() {
     pet_keychains: getDefaultParams(getProduct('pet_keychains')),
     bracelet_gems: getDefaultParams(getProduct('bracelet_gems')),
     tip_jar: getDefaultParams(getProduct('tip_jar')),
+    wifi_sign: getDefaultParams(getProduct('wifi_sign')),
   });
   const [model, setModel] = useState<GeneratedModel | null>({
     source: 'empty',
@@ -439,7 +442,9 @@ export function App() {
       setStatus(t('status.loadStl'));
     } else if (configuratorMode === 'create') {
       setStatus(
-        productType === 'tip_jar'
+        productType === 'wifi_sign'
+          ? t('status.configureWifiSign')
+        : productType === 'tip_jar'
           ? t('status.configureTipJar')
         : productType === 'bracelet_gems'
           ? t('status.configureBracelet')
@@ -496,6 +501,8 @@ export function App() {
           ? t('status.generatingPetKeychain')
         : productType === 'tip_jar'
           ? t('status.generatingTipJar')
+        : productType === 'wifi_sign'
+          ? t('status.generatingWifiSign')
         : productType === 'bracelet_gems'
           ? t('status.generatingBracelet')
         : productType === 'image_layers'
@@ -526,6 +533,8 @@ export function App() {
               })
           : productType === 'tip_jar'
             ? await generateTipJarModel(params)
+          : productType === 'wifi_sign'
+            ? await generateWifiSignModel(params)
           : productType === 'bracelet_gems'
             ? await generateBraceletGemsModel(params)
           : productType === 'lamp'
@@ -644,7 +653,9 @@ export function App() {
     if (isLocalCreator(nextType) || isWipProductType(nextType)) {
       setActiveModel({ source: 'empty', format: 'stl' });
       setStatus(
-        nextType === 'tip_jar'
+        nextType === 'wifi_sign'
+          ? t('status.configureWifiSign')
+        : nextType === 'tip_jar'
           ? t('status.configureTipJar')
         : nextType === 'bracelet_gems'
           ? t('status.configureBracelet')

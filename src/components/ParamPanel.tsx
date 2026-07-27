@@ -106,6 +106,13 @@ export function ParamPanel({
   );
   const visibleMainParams = mainParams.filter((param) => {
     if (
+      product.type === 'wifi_sign' &&
+      param.key === 'wifi_password' &&
+      params.wifi_security === 'nopass'
+    ) {
+      return false;
+    }
+    if (
       product.type === 'tip_jar' &&
       param.key === 'qr_url' &&
       params.tip_jar_version === 'basic'
@@ -335,6 +342,8 @@ function ParamControl({
       ? 'bracelet_text'
       : productType === 'pet_keychains' && param.key === 'text'
         ? 'pet_name'
+      : productType === 'wifi_sign' && param.key === 'base_color'
+        ? 'wifi_sign_color'
       : param.key;
   const label = t(`params.${translationKey}.label`, { defaultValue: param.label });
   const help = param.help
@@ -347,6 +356,14 @@ function ParamControl({
         : param.key === 'tip_message'
           ? 'placeholders.tipMessage'
           : 'placeholders.qrUrl'
+      : productType === 'wifi_sign'
+        ? param.key === 'wifi_title'
+          ? 'placeholders.wifiTitle'
+          : param.key === 'wifi_label'
+            ? 'placeholders.wifiLabel'
+            : param.key === 'wifi_ssid'
+              ? 'placeholders.wifiSsid'
+              : 'placeholders.wifiPassword'
       : param.key === 'text'
         ? productType === 'bracelet_gems'
           ? 'placeholders.braceletText'

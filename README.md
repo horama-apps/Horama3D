@@ -10,6 +10,8 @@ Web configurator for loading STL files, applying product-specific transformation
 - Local creators for signs and Bracelet Gems.
 - Configurable tip jars with standard and premium dimensions, removable lids,
   raised branding, scannable QR geometry, and NFC placement markers.
+- WiFi QR signs with configurable network credentials, security, dimensions,
+  raised typography, and scan-ready connection payloads.
 - Urn generation with a silhouette cavity, lid-rest ring, pressure lid, and four retaining ribs.
 - STL, ZIP, and 3MF exports without a generation backend.
 
