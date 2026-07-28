@@ -5,6 +5,7 @@ import {
   DEFAULT_COLOR,
   HEAD_KEYCHAINS_ACCENT_COLOR,
   IMAGE_LAYERS_ACCENT_COLOR,
+  BRAND_DECORATION_ACCENT_COLOR,
   KEYCHAINS_ACCENT_COLOR,
   LAMP_ACCENT_COLOR,
   PET_KEYCHAINS_ACCENT_COLOR,
@@ -496,6 +497,57 @@ export const products: ProductDefinition[] = [
       },
       { kind: 'boolean', key: 'top_border', label: 'Raised top border', defaultValue: true },
       { kind: 'number', key: 'top_border_height_mm', label: 'Top border height', unit: 'mm', min: 0.2, max: 20, step: 0.2, defaultValue: 3 },
+    ],
+  },
+  {
+    type: 'brand_decoration',
+    name: 'Brand Decoration',
+    description: 'Turn a logo or image into a printable silhouette, line-art piece, or simplified relief.',
+    accent: BRAND_DECORATION_ACCENT_COLOR,
+    params: [
+      {
+        kind: 'select',
+        key: 'simplification_mode',
+        label: 'Simplification',
+        defaultValue: 'silhouette',
+        options: [
+          { label: 'Filled silhouette', value: 'silhouette' },
+          { label: 'Line art', value: 'line_art' },
+          { label: 'Three-level relief', value: 'levels' },
+        ],
+      },
+      {
+        kind: 'select',
+        key: 'backing_style',
+        label: 'Backing',
+        defaultValue: 'contour',
+        options: [
+          { label: 'Contour backing', value: 'contour' },
+          { label: 'Rectangular plaque', value: 'rectangle' },
+          { label: 'No backing', value: 'none' },
+        ],
+      },
+      { kind: 'number', key: 'width_mm', label: 'Printed width', unit: 'mm', min: 30, max: 500, step: 1, defaultValue: 160 },
+      { kind: 'number', key: 'base_thickness_mm', label: 'Backing thickness', unit: 'mm', min: 0.8, max: 8, step: 0.2, defaultValue: 2.4 },
+      { kind: 'number', key: 'relief_height_mm', label: 'Image relief', unit: 'mm', min: 0.4, max: 8, step: 0.2, defaultValue: 1.2 },
+      { kind: 'number', key: 'image_threshold', label: 'Foreground threshold', unit: '%', min: 5, max: 95, step: 1, defaultValue: 55 },
+      { kind: 'number', key: 'line_width_mm', label: 'Minimum line width', unit: 'mm', min: 0.6, max: 8, step: 0.2, defaultValue: 1.6 },
+      { kind: 'number', key: 'backing_margin_mm', label: 'Contour margin', unit: 'mm', min: 0, max: 20, step: 0.5, defaultValue: 3 },
+      {
+        kind: 'select',
+        key: 'detail_preset',
+        label: 'Detail',
+        defaultValue: 'balanced',
+        options: [
+          { label: 'Draft', value: 'draft' },
+          { label: 'Balanced', value: 'balanced' },
+          { label: 'High', value: 'high' },
+        ],
+      },
+      { kind: 'boolean', key: 'invert_image', label: 'Invert foreground and background', defaultValue: false },
+      { kind: 'color', key: 'base_color', label: 'Backing color', defaultValue: '#efe6d5' },
+      { kind: 'color', key: 'detail_color', label: 'Image color', defaultValue: '#171717' },
+      { kind: 'color', key: 'mid_color', label: 'Middle relief color', defaultValue: '#c8755b' },
     ],
   },
   {
@@ -1181,7 +1233,7 @@ export const products: ProductDefinition[] = [
   {
     type: 'display_accessories',
     name: 'Displays and Holders',
-    description: 'Business-card holders, menu holders, and small branded decorations.',
+    description: 'Business-card and menu holders with branding attached to the printed body.',
     accent: DISPLAY_ACCESSORIES_ACCENT_COLOR,
     params: [
       {
@@ -1192,7 +1244,6 @@ export const products: ProductDefinition[] = [
         options: [
           { label: 'Business-card holder', value: 'card_holder' },
           { label: 'Menu holder', value: 'menu_holder' },
-          { label: 'Brand decoration', value: 'decor' },
         ],
       },
       { kind: 'text', key: 'front_text', label: 'Brand text', defaultValue: 'HORAMA CAFÉ', placeholder: 'Your business' },

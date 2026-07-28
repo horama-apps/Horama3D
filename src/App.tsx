@@ -30,6 +30,7 @@ import {
 import { generateTextureModelLocally } from './generation/textureGenerator';
 import { analyzeStlLocally } from './generation/stlValidation';
 import { generateImageLayersLocally } from './generation/imageLayersGenerator';
+import { generateBrandDecorationLocally } from './generation/brandDecorationGenerator';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
 import {
@@ -61,7 +62,7 @@ interface Toast {
 const wipProductTypes: ProductType[] = [];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
   stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
-  image: ['image_layers'],
+  image: ['image_layers', 'brand_decoration'],
   create: [
     'signs',
     'business_signage',
@@ -91,6 +92,7 @@ const configureStatusByProduct: Partial<Record<ProductType, string>> = {
   keychains: 'status.configureBusinessKeychain',
   display_accessories: 'status.configureDisplayAccessory',
   business_packages: 'status.configureBusinessPackage',
+  brand_decoration: 'status.configureBrandDecoration',
 };
 const generatingStatusByProduct: Partial<Record<ProductType, string>> = {
   signs: 'status.generatingSign',
@@ -103,10 +105,15 @@ const generatingStatusByProduct: Partial<Record<ProductType, string>> = {
   keychains: 'status.generatingBusinessKeychain',
   display_accessories: 'status.generatingDisplayAccessory',
   business_packages: 'status.generatingBusinessPackage',
+  brand_decoration: 'status.generatingBrandDecoration',
 };
 
 function isWipProductType(type: ProductType): boolean {
   return wipProductTypes.includes(type);
+}
+
+function isImageProduct(type: ProductType): boolean {
+  return type === 'image_layers' || type === 'brand_decoration';
 }
 
 function isLocalCreator(type: ProductType): boolean {
@@ -146,6 +153,7 @@ export function App() {
     textures: getDefaultParams(getProduct('textures')),
     keychains: getDefaultParams(getProduct('keychains')),
     image_layers: getDefaultParams(getProduct('image_layers')),
+    brand_decoration: getDefaultParams(getProduct('brand_decoration')),
     signs: getDefaultParams(getProduct('signs')),
     pet_keychains: getDefaultParams(getProduct('pet_keychains')),
     bracelet_gems: getDefaultParams(getProduct('bracelet_gems')),
@@ -538,7 +546,7 @@ export function App() {
     setStatus(
       generatingStatusByProduct[productType]
         ? t(generatingStatusByProduct[productType] as string)
-        : productType === 'image_layers'
+        : isImageProduct(productType)
           ? t('status.generatingImageLayersLocal')
         : productType === 'lamp'
           ? t('status.generatingLampLocal')
@@ -554,6 +562,11 @@ export function App() {
       const generated =
         productType === 'image_layers'
           ? await generateImageLayersLocally(uploadedImageFile as File, params)
+        : productType === 'brand_decoration'
+          ? await generateBrandDecorationLocally(
+              uploadedImageFile as File,
+              params,
+            )
         : productType === 'signs'
           ? await generateSignModel({
               ...params,
@@ -589,7 +602,7 @@ export function App() {
           : productType === 'textures'
             ? await generateTextureModelLocally(uploadedFile as File, params)
           : await generateUrnModelLocally(uploadedFile as File, params);
-      if (productType === 'image_layers') setDownloadFormat('3mf');
+      if (isImageProduct(productType)) setDownloadFormat('3mf');
       setActiveModel(generated);
       setIsModelValidated(generated.source !== 'empty');
       if (
@@ -699,7 +712,7 @@ export function App() {
       return;
     }
 
-    if (nextType === 'image_layers') {
+    if (isImageProduct(nextType)) {
       setActiveModel({ source: 'empty', format: 'stl' });
       setIsModelValidated(Boolean(uploadedImageFile));
       setStatus(uploadedImageFile ? t('status.imageReady') : t('status.loadImage'));
@@ -782,7 +795,7 @@ export function App() {
       return;
     }
 
-    if (productType === 'image_layers' && uploadedImageFile) {
+    if (isImageProduct(productType) && uploadedImageFile) {
       setActiveModel({ source: 'empty', format: 'stl' });
       setIsModelValidated(true);
       setStatus(t('status.imageReady'));
@@ -1008,14 +1021,14 @@ export function App() {
         </div>
 
         <div className='product-list'>
-          {configuratorMode === 'stl' || productType === 'image_layers' ? (
+          {configuratorMode === 'stl' || isImageProduct(productType) ? (
             <div className='upload-card'>
             <input
               ref={uploadInputRef}
               className='file-input'
               type='file'
-              accept={productType === 'image_layers' ? '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp' : '.stl,model/stl,application/vnd.ms-pki.stl'}
-              onChange={(event) => productType === 'image_layers'
+              accept={isImageProduct(productType) ? '.png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp' : '.stl,model/stl,application/vnd.ms-pki.stl'}
+              onChange={(event) => isImageProduct(productType)
                 ? loadImageFile(event.target.files?.[0])
                 : void loadStlFile(event.target.files?.[0])}
             />
@@ -1031,12 +1044,12 @@ export function App() {
               )}
               {isAnalyzing
                 ? t('upload.analyzing')
-                : productType === 'image_layers'
+                : isImageProduct(productType)
                   ? t('upload.loadImage')
                   : t('upload.load')}
             </button>
             <p>
-              {productType === 'image_layers'
+              {isImageProduct(productType)
                 ? uploadedImageFile?.name ?? t('upload.selectImage')
                 : uploadedFile?.name ?? t('upload.select')}
             </p>
@@ -1212,7 +1225,7 @@ export function App() {
           <div className={isWipProduct ? 'stage-lock stage-lock-wip' : 'stage-lock'}>
             {isWipProduct
               ? t('common.workInProgress')
-              : productType === 'image_layers'
+              : isImageProduct(productType)
                 ? t('status.loadImage')
                 : t('status.loadValidStl')}
           </div>

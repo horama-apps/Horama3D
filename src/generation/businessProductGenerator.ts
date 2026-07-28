@@ -193,15 +193,26 @@ export async function generateDisplayAccessoryModel(
   let body: THREE.Object3D;
 
   if (kind === 'menu_holder') body = buildMenuHolder(width, height, wall);
-  else if (kind === 'decor') body = buildDecoration(Math.min(width, height) * 0.42, wall);
   else body = buildCardHolder(width, height, wall);
 
   const components: Component[] = [
     component('body', kind, `${kind}.stl`, body, bodyColor, 'accesorio'),
   ];
-  if (kind !== 'decor' && label.trim()) {
-    const text = buildText(font, label, width * 0.72, height * 0.16, 1);
-    text.position.set(0, kind === 'menu_holder' ? -height * 0.32 : -height * 0.14, wall * 2);
+  if (label.trim()) {
+    const isMenuHolder = kind === 'menu_holder';
+    const text = buildText(
+      font,
+      label,
+      width * 0.72,
+      isMenuHolder ? wall * 1.6 : height * 0.16,
+      1,
+    );
+    text.rotation.x = Math.PI / 2;
+    text.position.set(
+      0,
+      isMenuHolder ? -14.02 : -14.02,
+      isMenuHolder ? wall * 3 : height * 0.21,
+    );
     components.push(component('text', 'marca', `${kind}-marca.stl`, text, detailColor, 'accesorio'));
   }
   return finalize(components, `${kind}-${slugify(label)}`);

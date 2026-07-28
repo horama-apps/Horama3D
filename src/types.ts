@@ -6,6 +6,7 @@ export type ProductType =
   | 'textures'
   | 'keychains'
   | 'image_layers'
+  | 'brand_decoration'
   | 'signs'
   | 'pet_keychains'
   | 'bracelet_gems'

@@ -57,7 +57,10 @@ export function ParamPanel({
   const clickerInfo = product.type === 'clicker' ? modelMetadata?.clicker : undefined;
   const headKeychainInfo =
     product.type === 'head_keychains' ? modelMetadata?.headKeychain : undefined;
-  const imageLayersInfo = product.type === 'image_layers' ? modelMetadata?.imageLayers : undefined;
+  const imageLayersInfo =
+    product.type === 'image_layers' || product.type === 'brand_decoration'
+      ? modelMetadata?.imageLayers
+      : undefined;
   const transformInfoRows = lampInfo
     ? getLampInfoRows(lampInfo, t)
     : urnInfo
@@ -72,14 +75,24 @@ export function ParamPanel({
   const dimensionInfoRows = getDimensionInfoRows(modelObjectBounds, t);
   const generalInfoRows = [...dimensionInfoRows, ...transformInfoRows];
   const colorParams = product.params.filter((param) => param.kind === 'color');
-  const visibleColorParams = colorParams.filter(
-    (param) =>
-      !(
-        product.type === 'tip_jar' &&
-        params.tip_jar_version === 'basic' &&
-        param.key === 'qr_color'
-      ),
-  );
+  const visibleColorParams = colorParams.filter((param) => {
+    if (
+      product.type === 'tip_jar' &&
+      params.tip_jar_version === 'basic' &&
+      param.key === 'qr_color'
+    ) {
+      return false;
+    }
+    if (product.type === 'brand_decoration') {
+      if (param.key === 'mid_color' && params.simplification_mode !== 'levels') {
+        return false;
+      }
+      if (param.key === 'base_color' && params.backing_style === 'none') {
+        return false;
+      }
+    }
+    return true;
+  });
   const postProcessingParams =
     product.type === 'clicker'
       ? product.params.filter((param) =>
@@ -122,6 +135,26 @@ export function ParamPanel({
     if (product.type === 'business_signage') {
       if (param.key === 'back_text' && !params.double_sided) return false;
       if (param.key === 'table_number' && params.signage_template !== 'table_number') {
+        return false;
+      }
+    }
+    if (product.type === 'brand_decoration') {
+      if (
+        param.key === 'line_width_mm' &&
+        params.simplification_mode !== 'line_art'
+      ) {
+        return false;
+      }
+      if (
+        ['base_thickness_mm', 'backing_margin_mm'].includes(param.key) &&
+        params.backing_style === 'none'
+      ) {
+        return false;
+      }
+      if (
+        param.key === 'backing_margin_mm' &&
+        params.backing_style !== 'contour'
+      ) {
         return false;
       }
     }
