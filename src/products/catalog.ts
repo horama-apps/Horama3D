@@ -501,8 +501,8 @@ export const products: ProductDefinition[] = [
   },
   {
     type: 'brand_decoration',
-    name: 'Brand Decoration',
-    description: 'Turn a logo or image into a printable silhouette, line-art piece, or simplified relief.',
+    name: 'Decoración de marca',
+    description: 'Convierte un logotipo o una imagen en una silueta imprimible, una pieza de arte lineal o un relieve simplificado.',
     accent: BRAND_DECORATION_ACCENT_COLOR,
     params: [
       {
