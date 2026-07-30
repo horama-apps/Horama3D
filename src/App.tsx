@@ -33,6 +33,7 @@ import { generateImageLayersLocally } from './generation/imageLayersGenerator';
 import { generateBrandDecorationLocally } from './generation/brandDecorationGenerator';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
+import { PrintingCalculatorPage } from './printing-calculator/PrintingCalculatorPage';
 import {
   exportModel,
   getDefaultExportName,
@@ -50,6 +51,7 @@ import type {
 type ToastTone = 'success' | 'warning' | 'error' | 'issue';
 type ToastPlacement = 'center' | 'corner' | 'top';
 type ConfiguratorMode = 'stl' | 'image' | 'create';
+type WorkspaceView = ConfiguratorMode | 'calculator';
 
 interface Toast {
   id: number;
@@ -139,6 +141,8 @@ export function App() {
   );
   const [configuratorMode, setConfiguratorMode] =
     useState<ConfiguratorMode>(isDemoMode ? 'create' : 'stl');
+  const [workspaceView, setWorkspaceView] =
+    useState<WorkspaceView>(isDemoMode ? 'create' : 'stl');
   const [productType, setProductType] = useState<ProductType>(
     isDemoMode ? 'signs' : 'lamp',
   );
@@ -774,6 +778,15 @@ export function App() {
     );
   };
 
+  const selectWorkspaceView = (nextView: WorkspaceView) => {
+    if (nextView === 'calculator') {
+      setWorkspaceView('calculator');
+      return;
+    }
+    setWorkspaceView(nextView);
+    selectConfiguratorMode(nextView);
+  };
+
   const resetParams = () => {
     setHasUsedViewerActions(true);
     if (productType === 'signs') setSignHolePositions({});
@@ -992,6 +1005,15 @@ export function App() {
   const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
   const downloadFormats: DownloadFormat[] = ['stl', '3mf'];
 
+  if (workspaceView === 'calculator') {
+    return (
+      <PrintingCalculatorPage
+        currentConfiguratorMode={configuratorMode}
+        onNavigate={selectWorkspaceView}
+      />
+    );
+  }
+
   return (
     <main
       className={isDemoMode ? 'app-shell app-shell-demo' : 'app-shell'}
@@ -999,18 +1021,23 @@ export function App() {
     >
       <aside className='panel panel-left'>
         <div className='brand'>
-          <div className='brand-mark'>
+          <button
+            type='button'
+            className='brand-mark brand-mark-button'
+            aria-label='Abrir Horama'
+            onClick={() => selectWorkspaceView('calculator')}
+          >
             <img
               src={`${import.meta.env.BASE_URL}horama-mark.svg`}
               alt='Horama'
             />
-          </div>
+          </button>
           <div className='configurator-selector configurator-selector-brand'>
             <select
               aria-label={t('configurator.label')}
               value={configuratorMode}
               onChange={(event) =>
-                selectConfiguratorMode(event.target.value as ConfiguratorMode)
+                selectWorkspaceView(event.target.value as WorkspaceView)
               }
             >
               <option value='stl' disabled={isDemoMode}>{t('configurator.stl')}</option>
