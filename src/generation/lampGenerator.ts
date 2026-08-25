@@ -51,6 +51,7 @@ export async function generateLampModelLocally(
           innerScale: boundedNumber(params.inner_scale, 0.05, 0.98, 0.7),
           planarCutMm: boundedNumber(params.planar_cut_base_mm, 0, 100, 8),
           connectorMarginMm: boundedNumber(params.connector_margin_mm, 0, 20, 2),
+          autoScaleToFit: params.auto_scale_to_fit !== false,
           partGapMm: boundedNumber(params.part_gap_mm, 0, 100, 8),
           fitClearanceMm: boundedNumber(params.fit_clearance_mm, 0.2, 2.5, 0.9),
         },

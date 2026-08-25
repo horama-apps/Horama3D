@@ -15,6 +15,7 @@ interface LampWorkerRequest {
     innerScale: number;
     planarCutMm: number;
     connectorMarginMm: number;
+    autoScaleToFit: boolean;
     partGapMm: number;
     fitClearanceMm: number;
   };
@@ -115,18 +116,20 @@ function generateLamp(
       topExtents[0] + params.connectorMarginMm * 2,
       topExtents[1] + params.connectorMarginMm * 2,
     ];
-    let appliedScale = Math.max(
-      1,
-      minimumXY[0] / boxExtents(outer.boundingBox())[0],
-      minimumXY[1] / boxExtents(outer.boundingBox())[1],
-    );
+    let appliedScale = params.autoScaleToFit
+      ? Math.max(
+        1,
+        minimumXY[0] / boxExtents(outer.boundingBox())[0],
+        minimumXY[1] / boxExtents(outer.boundingBox())[1],
+      )
+      : 1;
     if (appliedScale > 1) {
       outer = replaceManifold(outer, outer.scale(appliedScale));
     }
 
     const requiredRadius = footprintRadius(top) + params.connectorMarginMm;
     let fit = findAttachmentFit(outer, top);
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (let attempt = 0; params.autoScaleToFit && attempt < 4; attempt += 1) {
       if (fit.clearance + ATTACHMENT_FIT_TOLERANCE_MM >= requiredRadius) break;
       const localScale = requiredRadius / Math.max(
         fit.clearance - ATTACHMENT_FIT_TOLERANCE_MM,
@@ -178,9 +181,16 @@ function generateLamp(
 
     const components = body.decompose();
     const componentCount = components.length;
+    const componentVolumes = components.map((component) => Math.abs(component.volume()));
+    const largestComponentVolume = Math.max(...componentVolumes, 0);
+    const detachedVolume = componentVolumes.reduce((sum, volume) => sum + volume, 0)
+      - largestComponentVolume;
     components.forEach((component) => component.delete());
-    if (componentCount !== 1) {
+    if (detachedVolume > Math.max(100, largestComponentVolume * 0.001)) {
       throw new Error('The top mount could not be joined to the lamp body.');
+    }
+    if (componentCount > 1) {
+      body = keepLargest(body);
     }
 
     body = moveBoundsMinimumToBed(body);
@@ -204,6 +214,9 @@ function generateLamp(
     ];
     if (appliedScale > 1.0001) {
       warnings.push('The model was uniformly enlarged to cover the top lamp connector.');
+    }
+    if (componentCount > 1) {
+      warnings.push('A negligible disconnected mesh fragment was removed after joining the lamp connector.');
     }
 
     return {
@@ -278,7 +291,6 @@ function buildSafeCavity(
   const scaledWall = minimumExtent * (1 - requestedScale) / 2;
   const startingWall = Math.max(baseThicknessMm, scaledWall);
   const maximumWall = Math.max(startingWall, minimumExtent * 0.42);
-  const outerGenus = outer.genus();
   const wallCandidates: number[] = [];
   let wall = startingWall;
   while (wall <= maximumWall + 1e-6 && wallCandidates.length < 6) {
@@ -319,13 +331,11 @@ function buildSafeCavity(
         inner.translate([0, 0, bounds.min[2] - innerBounds.min[2] - 0.05]),
       );
     }
-    const body = wasm.Manifold.difference(outer, inner);
-    const parts = body.decompose();
-    const safe = parts.length === 1 && body.genus() <= outerGenus;
-    parts.forEach((part) => part.delete());
+    let body = wasm.Manifold.difference(outer, inner);
     const capacityMm3 = Math.max(0, outer.volume() - body.volume());
     inner.delete();
-    if (safe && capacityMm3 > 1) {
+    if (body.numTri() > 0 && capacityMm3 > 1) {
+      body = keepLargest(body);
       return {
         body,
         wallThickness: Math.max(candidateWall, minimumExtent * (1 - scale) / 2),
@@ -335,6 +345,23 @@ function buildSafeCavity(
     body.delete();
   }
   throw new Error('Unable to create a closed cavity without perforating the model exterior.');
+}
+
+function keepLargest(manifold: Manifold): Manifold {
+  const parts = manifold.decompose();
+  if (parts.length <= 1) {
+    parts.forEach((part) => part.delete());
+    return manifold;
+  }
+  let largest = parts[0];
+  for (let index = 1; index < parts.length; index += 1) {
+    if (Math.abs(parts[index].volume()) > Math.abs(largest.volume())) largest = parts[index];
+  }
+  parts.forEach((part) => {
+    if (part !== largest) part.delete();
+  });
+  manifold.delete();
+  return largest;
 }
 
 function buildLoftedSilhouetteCutter(

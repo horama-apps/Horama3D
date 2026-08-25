@@ -114,6 +114,13 @@ export const products: ProductDefinition[] = [
         defaultValue: 2,
       },
       {
+        kind: 'boolean',
+        key: 'auto_scale_to_fit',
+        label: 'Auto-scale to minimum fit',
+        help: 'Uniformly enlarges the STL only as much as needed to fit the fixed lamp mechanism.',
+        defaultValue: true,
+      },
+      {
         kind: 'number',
         key: 'fit_clearance_mm',
         label: 'Fit clearance',
