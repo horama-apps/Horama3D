@@ -18,6 +18,7 @@ interface LampWorkerRequest {
     autoScaleToFit: boolean;
     partGapMm: number;
     fitClearanceMm: number;
+    preserveBody: boolean;
   };
 }
 
@@ -103,6 +104,72 @@ function generateLamp(
 
   try {
     const initialBounds = outer.boundingBox();
+    if (params.preserveBody) {
+      outer = moveBoundsMinimumToOrigin(outer);
+      const bodyBounds = outer.boundingBox();
+      const bodyExtents = boxExtents(bodyBounds);
+      const fit = {
+        center: [
+          (bodyBounds.min[0] + bodyBounds.max[0]) / 2,
+          (bodyBounds.min[1] + bodyBounds.max[1]) / 2,
+        ] as [number, number],
+        clearance: Math.min(bodyExtents[0], bodyExtents[1]) / 2,
+      };
+
+      const topBounds = top.boundingBox();
+      top = replaceManifold(
+        top,
+        top.translate([
+          fit.center[0] - (topBounds.min[0] + topBounds.max[0]) / 2,
+          fit.center[1] - (topBounds.min[1] + topBounds.max[1]) / 2,
+          -topBounds.min[2],
+        ]),
+      );
+
+      const throat = buildBaseInsertionThroat(
+        wasm,
+        base,
+        top,
+        params.fitClearanceMm,
+      );
+      let body = wasm.Manifold.difference(outer, throat);
+      throat.delete();
+      body = replaceManifold(body, wasm.Manifold.union([body, top]));
+      body = moveBoundsMinimumToBed(body);
+      base = moveBoundsMinimumToBed(base);
+
+      const outputBodyBounds = body.boundingBox();
+      const outputBaseBounds = base.boundingBox();
+      base = replaceManifold(
+        base,
+        base.translate([
+          outputBodyBounds.max[0] - outputBaseBounds.min[0] + params.partGapMm,
+          0,
+          0,
+        ]),
+      );
+
+      const bodyStl = manifoldToBinaryStl(body);
+      const baseStl = manifoldToBinaryStl(base);
+      body.delete();
+      return {
+        body: bodyStl,
+        base: baseStl,
+        metadata: {
+          applied_scale: 1,
+          minimum_xy_mm: bodyExtents.slice(0, 2),
+          attachment_center_xy_mm: fit.center,
+          attachment_clearance_mm: fit.clearance,
+          effective_wall_thickness_mm: 0,
+          estimated_capacity_ml: 0,
+        },
+        warnings: [
+          'La malla abierta se conservó sin vaciarla ni recortarla.',
+          'Sólo se modificó la zona central de la base para colocar el mecanismo y generar la tapa.',
+        ],
+      };
+    }
+
     const cutHeight = initialBounds.min[2] + params.planarCutMm;
     if (cutHeight >= initialBounds.max[2] - 0.1) {
       throw new Error('The planar cut removes the complete model.');

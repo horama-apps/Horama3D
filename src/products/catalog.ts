@@ -121,6 +121,13 @@ export const products: ProductDefinition[] = [
         defaultValue: true,
       },
       {
+        kind: 'boolean',
+        key: 'preserve_open_mesh',
+        label: 'Preserve open meshes',
+        help: 'For a non-watertight STL, keep the body intact and only adapt its base for the removable lid.',
+        defaultValue: true,
+      },
+      {
         kind: 'number',
         key: 'fit_clearance_mm',
         label: 'Fit clearance',

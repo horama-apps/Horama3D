@@ -26,6 +26,9 @@ export async function generateLampModelLocally(
   const id = ++requestId;
   const input = await file.arrayBuffer();
   const baseUrl = import.meta.env.BASE_URL;
+  const analysis = await analyzeStlLocally(file);
+  const preserveOpenMesh =
+    params.preserve_open_mesh !== false && analysis.isWatertight === false;
 
   try {
     const response = await new Promise<LampWorkerResponse>((resolve, reject) => {
@@ -54,6 +57,7 @@ export async function generateLampModelLocally(
           autoScaleToFit: params.auto_scale_to_fit !== false,
           partGapMm: boundedNumber(params.part_gap_mm, 0, 100, 8),
           fitClearanceMm: boundedNumber(params.fit_clearance_mm, 0.2, 2.5, 0.9),
+          preserveBody: preserveOpenMesh,
         },
       }, [input]);
     });

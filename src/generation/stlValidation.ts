@@ -4,6 +4,7 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 export interface AnalyzeModelResult {
   isValid: boolean;
   isValidScenario?: boolean;
+  isWatertight?: boolean;
   issues: string[];
   message?: string;
   warnings: string[];
@@ -67,19 +68,22 @@ export async function analyzeStlLocally(file: File): Promise<AnalyzeModelResult>
 
     const openEdgeCount = Array.from(edgeUse.values()).filter((count) => count !== 2).length;
     geometry.dispose();
-    if (openEdgeCount > 0) {
-      return invalidResult(
-        `El STL no es hermético: se detectaron ${openEdgeCount} bordes abiertos o no manifold.`,
-      );
-    }
     if (Math.abs(signedVolumeTimesSix) <= 1e-6) {
       return invalidResult('El STL no representa un volumen sólido válido.');
     }
 
-    const warnings = triangleCount > 500_000
-      ? [`El STL contiene ${triangleCount.toLocaleString()} triángulos; el proceso local puede usar bastante memoria.`]
-      : [];
-    return { isValid: true, issues: [], warnings };
+    const warnings: string[] = [];
+    if (openEdgeCount > 0) {
+      warnings.push(
+        `El STL no es hermético: se detectaron ${openEdgeCount} bordes abiertos o no manifold. Se intentará procesar de todos modos.`,
+      );
+    }
+    if (triangleCount > 500_000) {
+      warnings.push(
+        `El STL contiene ${triangleCount.toLocaleString()} triángulos; el proceso local puede usar bastante memoria.`,
+      );
+    }
+    return { isValid: true, isWatertight: openEdgeCount === 0, issues: [], warnings };
   } catch {
     return invalidResult('No se pudo interpretar el archivo como un STL válido.');
   }
@@ -94,6 +98,7 @@ function invalidResult(message: string): AnalyzeModelResult {
   return {
     isValid: false,
     isValidScenario: false,
+    isWatertight: false,
     issues: [message],
     message,
     warnings: [],
