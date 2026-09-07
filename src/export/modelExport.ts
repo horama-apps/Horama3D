@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type { GeneratedModel, PreviewFile, ProductParams, ProductType } from '../types';
+import bambuA1MiniProjectSettings from './bambuA1MiniProjectSettings.json';
 import {
   DEFAULT_COLOR,
   KEYCHAIN_HOLE_RADIUS_MM,
@@ -19,6 +20,7 @@ interface ExportPart {
   filename: string;
   url: string;
   color?: string;
+  meshType?: 'normal_part' | 'modifier_part';
 }
 
 interface ExportMaterial {
@@ -152,6 +154,8 @@ async function export3mf(
     productType,
     params,
   );
+  if (productType === 'image_layers') validateMulticolorMeshes(meshes, 4);
+  if (productType === 'tap_to_pay_sleeve') validateMulticolorMeshes(meshes, 8);
 
   const title = getBaseName(getDefaultExportName(model, productType, '3mf'));
   const bambuProject = buildBambu3mfProject(meshes, title);
@@ -188,6 +192,29 @@ async function export3mf(
   };
 }
 
+function validateMulticolorMeshes(meshes: AssignedMesh[], maximumColors: number): void {
+  if (meshes.length < 3) {
+    throw new Error('The multicolor 3MF needs a backing and at least two color parts.');
+  }
+  const materials = getUniqueMaterials(meshes);
+  if (materials.length < 2 || materials.length > maximumColors) {
+    throw new Error(`The multicolor 3MF must contain between two and ${maximumColors} filament colors.`);
+  }
+  for (const { part, mesh } of meshes) {
+    const edgeCounts = new Map<string, number>();
+    for (const [first, second, third] of mesh.triangles) {
+      for (const [a, b] of [[first, second], [second, third], [third, first]]) {
+        const key = a < b ? `${a}:${b}` : `${b}:${a}`;
+        edgeCounts.set(key, (edgeCounts.get(key) ?? 0) + 1);
+      }
+    }
+    const invalidEdges = [...edgeCounts.values()].filter((count) => count !== 2).length;
+    if (invalidEdges > 0) {
+      throw new Error(`${part.object ?? part.filename} contains ${invalidEdges} non-manifold edges.`);
+    }
+  }
+}
+
 function getExportParts(model: GeneratedModel, productType: ProductType): ExportPart[] {
   if (model.previewFiles && model.previewFiles.length > 0) {
     return model.previewFiles
@@ -198,6 +225,7 @@ function getExportParts(model: GeneratedModel, productType: ProductType): Export
         filename: getPreviewFilename(file, index),
         url: file.url,
         color: file.color,
+        meshType: file.meshType,
       }));
   }
 
@@ -601,11 +629,12 @@ function buildBambu3mfProject(meshes: AssignedMesh[], title: string) {
   const materials = getUniqueMaterials(meshes);
   const prepared = prepareBambuMeshes(meshes, materials);
   const assemblyMin = getAssemblyMin(meshes, getAssemblyCenter(meshes));
-  const buildTranslation = new THREE.Vector3(165, 160, -assemblyMin.z);
+  // Leave room for a four-color wipe tower on the 180 x 180 mm A1 mini bed.
+  const buildTranslation = new THREE.Vector3(94, 65, -assemblyMin.z);
 
   return {
     mainModelXml: buildBambuMainModelXml(prepared, buildTranslation, title),
-    objectsModelXml: buildBambuObjectsModelXml(prepared),
+    objectsModelXml: buildBambuObjectsModelXml(prepared, materials),
     modelSettingsXml: buildBambuModelSettingsXml(prepared, buildTranslation, title, materials.length),
     projectSettingsJson: buildBambuProjectSettingsJson(materials),
   };
@@ -662,7 +691,7 @@ function buildBambuMainModelXml(
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US" requiredextensions="p" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">
-  <metadata name="Application">BambuStudio-compatible Horama3D exporter</metadata>
+  <metadata name="Application">BambuStudio-02.08.00.50</metadata>
   <metadata name="BambuStudio:3mfVersion">1</metadata>
   <metadata name="CreationDate">${today}</metadata>
   <metadata name="ModificationDate">${today}</metadata>
@@ -680,7 +709,14 @@ ${componentsXml}
 </model>`;
 }
 
-function buildBambuObjectsModelXml(prepared: PreparedBambuMesh[]): string {
+function buildBambuObjectsModelXml(
+  prepared: PreparedBambuMesh[],
+  materials: ExportMaterial[],
+): string {
+  const hasModifierParts = prepared.some((part) => part.part.meshType === 'modifier_part');
+  const materialsXml = materials
+    .map((material) => `      <base name="${escapeXml(material.name)}" displaycolor="${material.color}" />`)
+    .join('\n');
   const objectsXml = prepared
     .map((part, index) => {
       const verticesXml = part.centeredVertices
@@ -690,7 +726,9 @@ function buildBambuObjectsModelXml(prepared: PreparedBambuMesh[]): string {
         .map((triangle) => `          <triangle v1="${triangle[0]}" v2="${triangle[1]}" v3="${triangle[2]}" />`)
         .join('\n');
 
-      return `    <object id="${index + 1}" p:UUID="${uuidWithPrefix(`000100${formatPaddedIndex(index)}`)}" type="model">
+      const objectType = part.part.meshType === 'modifier_part' ? 'other' : 'model';
+      const materialAttributes = hasModifierParts ? '' : ` pid="1000" pindex="${part.extruder - 1}"`;
+      return `    <object id="${index + 1}" p:UUID="${uuidWithPrefix(`000100${formatPaddedIndex(index)}`)}" type="${objectType}" name="${escapeXml(part.part.object ?? part.part.filename)}"${materialAttributes}>
       <mesh>
         <vertices>
 ${verticesXml}
@@ -707,6 +745,9 @@ ${trianglesXml}
 <model unit="millimeter" xml:lang="en-US" requiredextensions="p" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">
   <metadata name="BambuStudio:3mfVersion">1</metadata>
   <resources>
+${hasModifierParts ? '' : `    <basematerials id="1000">
+${materialsXml}
+    </basematerials>`}
 ${objectsXml}
   </resources>
 </model>`;
@@ -718,15 +759,16 @@ function buildBambuModelSettingsXml(
   title: string,
   materialCount: number,
 ): string {
+  const hasModifierParts = prepared.some((part) => part.part.meshType === 'modifier_part');
   const totalFaces = prepared.reduce((count, part) => count + part.mesh.triangles.length, 0);
   const partXml = prepared
     .map((part, index) => {
       const name = part.part.object ?? part.part.role ?? part.part.filename;
-      return `    <part id="${index + 1}" subtype="normal_part">
+      return `    <part id="${index + 1}" subtype="${part.part.meshType ?? 'normal_part'}">
       <metadata key="name" value="${escapeXml(name)}"/>
       <metadata key="matrix" value="${matrixText(part.componentTranslation, true)}"/>
       <metadata key="source_file" value="${escapeXml(title)}.3mf"/>
-      <metadata key="source_object_id" value="${index}"/>
+      <metadata key="source_object_id" value="${hasModifierParts ? 0 : index}"/>
       <metadata key="source_volume_id" value="0"/>
       <metadata key="source_offset_x" value="${formatNumber(part.center.x)}"/>
       <metadata key="source_offset_y" value="${formatNumber(part.center.y)}"/>
@@ -736,7 +778,7 @@ function buildBambuModelSettingsXml(
     </part>`;
     })
     .join('\n');
-  const assembleItemsXml = prepared
+  const assembleItemsXml = hasModifierParts ? '' : prepared
     .map((part, index) => `   <assemble_item object_id="4" volume_id="${index}" transform="${matrixText(part.componentTranslation)}" />`)
     .join('\n');
 
@@ -776,6 +818,7 @@ function buildBambuContentTypesXml(): string {
  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
  <Default Extension="png" ContentType="image/png"/>
  <Default Extension="gcode" ContentType="text/x.gcode"/>
+ <Default Extension="json" ContentType="application/json"/>
 </Types>`;
 }
 
@@ -884,35 +927,41 @@ function buildBambuProjectSettingsJson(materials: ExportMaterial[]): string {
   const repeated = (value: string) => Array.from({ length: materialCount }, () => value);
   const filamentIndexes = Array.from({ length: materialCount }, (_, index) => String(index + 1));
 
-  return JSON.stringify(
-    {
-      bottom_color_penetration_layers: '3',
-      default_filament_colour: Array.from({ length: materialCount }, () => ''),
-      default_filament_profile: ['Bambu PLA Basic @BBL A1'],
-      enable_filament_dynamic_map: '0',
-      enable_mixed_color_sublayer: '0',
-      extruder_colour: filamentColours,
-      filament_colour: filamentColours,
-      filament_colour_type: repeated('0'),
-      filament_ids: repeated('GFA00'),
-      filament_is_support: repeated('0'),
-      filament_map: repeated('1'),
-      filament_map_mode: 'Auto For Flush',
-      filament_multi_colour: filamentColours,
-      filament_printable: repeated('3'),
-      filament_self_index: filamentIndexes,
-      filament_settings_id: repeated('Bambu PLA Basic @BBL A1'),
-      filament_type: repeated('PLA'),
-      filament_vendor: repeated('Bambu Lab'),
-      flush_multiplier: ['1'],
-      flush_volumes_matrix: buildFlushVolumesMatrix(materialCount),
-      flush_volumes_vector: Array.from({ length: materialCount * 2 }, () => '140'),
-      single_extruder_multi_material: materialCount > 1 ? '1' : '0',
-      top_color_penetration_layers: '5',
-    },
-    null,
-    4,
-  );
+  const settings = structuredClone(bambuA1MiniProjectSettings) as Record<string, unknown>;
+  // The bundled profile contains three filaments. Bambu expects every filament-indexed
+  // array to have the same length, otherwise it may silently omit colors or reject slicing.
+  for (const [key, value] of Object.entries(settings)) {
+    if (!Array.isArray(value) || value.length !== 3) continue;
+    settings[key] = Array.from({ length: materialCount }, (_, index) => value[Math.min(index, value.length - 1)]);
+  }
+  Object.assign(settings, {
+    bottom_color_penetration_layers: '3',
+    default_filament_colour: repeated(''),
+    default_filament_profile: repeated('Bambu PLA Basic @BBL A1M'),
+    enable_filament_dynamic_map: '0',
+    enable_mixed_color_sublayer: '0',
+    extruder_colour: filamentColours,
+    filament_colour: filamentColours,
+    filament_colour_type: repeated('0'),
+    filament_ids: repeated('GFA00'),
+    filament_is_support: repeated('0'),
+    filament_map: repeated('1'),
+    filament_map_mode: 'Auto For Flush',
+    filament_multi_colour: filamentColours,
+    filament_printable: repeated('3'),
+    filament_self_index: filamentIndexes,
+    filament_settings_id: repeated('Bambu PLA Basic @BBL A1M'),
+    filament_type: repeated('PLA'),
+    filament_vendor: repeated('Bambu Lab'),
+    flush_multiplier: ['1'],
+    flush_volumes_matrix: buildFlushVolumesMatrix(materialCount),
+    flush_volumes_vector: Array.from({ length: materialCount * 2 }, () => '140'),
+    single_extruder_multi_material: materialCount > 1 ? '1' : '0',
+    top_color_penetration_layers: '5',
+    wipe_tower_x: ['19.2'],
+    wipe_tower_y: ['110'],
+  });
+  return JSON.stringify(settings, null, 4);
 }
 
 function buildFlushVolumesMatrix(materialCount: number): string[] {
@@ -930,7 +979,7 @@ function buildBambuSliceInfoXml(): string {
 <config>
   <header>
     <header_item key="X-BBL-Client-Type" value="slicer"/>
-    <header_item key="X-BBL-Client-Version" value="Horama3D"/>
+    <header_item key="X-BBL-Client-Version" value="02.08.00.50"/>
   </header>
 </config>`;
 }

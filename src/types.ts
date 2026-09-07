@@ -6,6 +6,7 @@ export type ProductType =
   | 'textures'
   | 'keychains'
   | 'image_layers'
+  | 'tap_to_pay_sleeve'
   | 'brand_decoration'
   | 'signs'
   | 'pet_keychains'
@@ -106,6 +107,7 @@ export interface GeneratedModel {
     clicker?: ClickerTransformInfo;
     headKeychain?: HeadKeychainTransformInfo;
     imageLayers?: ImageLayersTransformInfo;
+    tapToPaySleeve?: TapToPaySleeveTransformInfo;
     mountingHoles?: Array<{
       key: string;
       x: number;
@@ -130,7 +132,9 @@ export interface PreviewFile {
   url: string;
   format: 'stl' | '3mf' | 'glb';
   color?: string;
+  meshType?: 'normal_part' | 'modifier_part';
   previewPosition?: [number, number, number];
+  previewRotation?: [number, number, number];
 }
 
 export interface LampTransformInfo {
@@ -170,7 +174,29 @@ export interface ImageLayersTransformInfo {
   width_mm?: number;
   height_mm?: number;
   layer_height_mm?: number;
+  base_thickness_mm?: number;
+  color_thickness_mm?: number;
   color_count?: number;
   layer_count?: number;
   colors?: string[];
+}
+
+export interface TapToPaySleeveTransformInfo {
+  original_width_px?: number;
+  original_height_px?: number;
+  processed_width_px?: number;
+  processed_height_px?: number;
+  outer_width_mm?: number;
+  outer_height_mm?: number;
+  total_thickness_mm?: number;
+  card_width_mm?: number;
+  card_height_mm?: number;
+  card_clearance_mm?: number;
+  effective_clearance_x_mm?: number;
+  effective_clearance_y_mm?: number;
+  effective_clearance_z_mm?: number;
+  color_thickness_mm?: number;
+  color_count?: number;
+  colors?: string[];
+  opening_side?: 'left' | 'right';
 }

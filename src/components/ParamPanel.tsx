@@ -14,6 +14,7 @@ import type {
   LampTransformInfo,
   UrnTransformInfo,
   ImageLayersTransformInfo,
+  TapToPaySleeveTransformInfo,
 } from '../types';
 
 interface ParamPanelProps {
@@ -61,6 +62,9 @@ export function ParamPanel({
     product.type === 'image_layers' || product.type === 'brand_decoration'
       ? modelMetadata?.imageLayers
       : undefined;
+  const sleeveInfo = product.type === 'tap_to_pay_sleeve'
+    ? modelMetadata?.tapToPaySleeve
+    : undefined;
   const transformInfoRows = lampInfo
     ? getLampInfoRows(lampInfo, t)
     : urnInfo
@@ -71,6 +75,8 @@ export function ParamPanel({
           ? getHeadKeychainInfoRows(headKeychainInfo, t)
         : imageLayersInfo
           ? getImageLayersInfoRows(imageLayersInfo, t)
+        : sleeveInfo
+          ? getTapToPaySleeveInfoRows(sleeveInfo, t)
           : [];
   const dimensionInfoRows = getDimensionInfoRows(modelObjectBounds, t);
   const generalInfoRows = [...dimensionInfoRows, ...transformInfoRows];
@@ -797,7 +803,34 @@ function getImageLayersInfoRows(info: ImageLayersTransformInfo, t: TFunction) {
     { label: t('info.layers'), value: formatInfoNumber(info.layer_count) },
     { label: t('info.processedSize'), value: processedSize },
     { label: t('info.physicalSize'), value: physicalSize },
-    { label: t('info.layerHeight'), value: formatInfoNumber(info.layer_height_mm, 'mm') },
+    { label: t('info.baseThickness'), value: formatInfoNumber(info.base_thickness_mm, 'mm') },
+    { label: t('info.colorThickness'), value: formatInfoNumber(info.color_thickness_mm, 'mm') },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
+function getTapToPaySleeveInfoRows(info: TapToPaySleeveTransformInfo, t: TFunction) {
+  const processedSize = info.processed_width_px && info.processed_height_px
+    ? `${info.processed_width_px} × ${info.processed_height_px} px`
+    : undefined;
+  const physicalSize = info.outer_width_mm && info.outer_height_mm && info.total_thickness_mm
+    ? `${info.outer_width_mm.toFixed(1)} × ${info.outer_height_mm.toFixed(1)} × ${info.total_thickness_mm.toFixed(1)} mm`
+    : undefined;
+  const cardSize = info.card_width_mm && info.card_height_mm
+    ? `${info.card_width_mm.toFixed(1)} × ${info.card_height_mm.toFixed(1)} mm`
+    : undefined;
+  const effectiveClearance = info.effective_clearance_x_mm !== undefined
+    && info.effective_clearance_y_mm !== undefined
+    && info.effective_clearance_z_mm !== undefined
+    ? `${info.effective_clearance_x_mm.toFixed(2)} × ${info.effective_clearance_y_mm.toFixed(2)} × ${info.effective_clearance_z_mm.toFixed(2)} mm`
+    : undefined;
+  return [
+    { label: t('info.colors'), value: formatInfoNumber(info.color_count) },
+    { label: t('info.processedSize'), value: processedSize },
+    { label: t('info.physicalSize'), value: physicalSize },
+    { label: t('info.cardSize'), value: cardSize },
+    { label: t('info.cardClearance'), value: formatInfoNumber(info.card_clearance_mm, 'mm') },
+    { label: t('info.effectiveClearance'), value: effectiveClearance },
+    { label: t('info.openingSide'), value: info.opening_side ? t(`options.opening_side.${info.opening_side}`) : undefined },
   ].filter((row): row is { label: string; value: string } => Boolean(row.value));
 }
 

@@ -472,12 +472,13 @@ export const products: ProductDefinition[] = [
   {
     type: 'image_layers',
     name: 'Image to Layers',
-    description: 'Convert a reduced-color image into stacked printable color layers.',
+    description: 'Convert a simple image into an aligned multicolor 3MF for the slicer.',
     accent: IMAGE_LAYERS_ACCENT_COLOR,
     params: [
-      { kind: 'number', key: 'color_count', label: 'Material colors', min: 2, max: 16, step: 1, defaultValue: 8 },
+      { kind: 'number', key: 'color_count', label: 'Material colors', min: 2, max: 4, step: 1, defaultValue: 4 },
       { kind: 'number', key: 'width_mm', label: 'Printed width', unit: 'mm', min: 20, max: 400, step: 1, defaultValue: 120 },
-      { kind: 'number', key: 'layer_height_mm', label: 'Layer height', unit: 'mm', min: 0.2, max: 5, step: 0.2, defaultValue: 1.2 },
+      { kind: 'number', key: 'base_thickness_mm', label: 'Backing thickness', unit: 'mm', min: 0.8, max: 4, step: 0.2, defaultValue: 1.6 },
+      { kind: 'number', key: 'color_thickness_mm', label: 'Color face thickness', unit: 'mm', min: 0.2, max: 1, step: 0.2, defaultValue: 0.4 },
       {
         kind: 'select', key: 'detail_preset', label: 'Detail', defaultValue: 'balanced',
         options: [
@@ -492,18 +493,40 @@ export const products: ProductDefinition[] = [
         options: [
           { label: 'Detect from border', value: 'border' },
           { label: 'Dominant color', value: 'dominant' },
-          { label: 'No full backing', value: 'none' },
+        ],
+      },
+    ],
+  },
+  {
+    type: 'tap_to_pay_sleeve',
+    name: 'Tap to Pay Sleeve',
+    description: 'Turn an image into a slim multicolor credit-card sleeve ready for the slicer.',
+    accent: IMAGE_LAYERS_ACCENT_COLOR,
+    params: [
+      { kind: 'number', key: 'color_count', label: 'Maximum material colors', min: 2, max: 8, step: 1, defaultValue: 4 },
+      {
+        kind: 'select', key: 'image_fit', label: 'Image fit', defaultValue: 'cover',
+        options: [
+          { label: 'Fill the front', value: 'cover' },
+          { label: 'Show the complete image', value: 'contain' },
+        ],
+      },
+      { kind: 'number', key: 'color_thickness_mm', label: 'Multicolor face thickness', unit: 'mm', min: 0.2, max: 0.6, step: 0.1, defaultValue: 0.4 },
+      {
+        kind: 'select', key: 'detail_preset', label: 'Detail', defaultValue: 'high',
+        options: [
+          { label: 'Draft', value: 'draft' },
+          { label: 'Balanced', value: 'balanced' },
+          { label: 'High', value: 'high' },
         ],
       },
       {
-        kind: 'select', key: 'layer_order_strategy', label: 'Layer order', defaultValue: 'dark_on_top',
+        kind: 'select', key: 'background_strategy', label: 'Body color', defaultValue: 'border',
         options: [
-          { label: 'Dark details on top', value: 'dark_on_top' },
-          { label: 'Light details on top', value: 'light_on_top' },
+          { label: 'Detect from border', value: 'border' },
+          { label: 'Dominant color', value: 'dominant' },
         ],
       },
-      { kind: 'boolean', key: 'top_border', label: 'Raised top border', defaultValue: true },
-      { kind: 'number', key: 'top_border_height_mm', label: 'Top border height', unit: 'mm', min: 0.2, max: 20, step: 0.2, defaultValue: 3 },
     ],
   },
   {

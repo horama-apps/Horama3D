@@ -519,6 +519,9 @@ export function Viewer3D({
           if (previewFile.previewPosition) {
             mesh.position.fromArray(previewFile.previewPosition);
           }
+          if (previewFile.previewRotation) {
+            mesh.rotation.set(...previewFile.previewRotation);
+          }
           context.modelRoot.add(mesh);
           objectBounds.push(
             measureObjectBounds(

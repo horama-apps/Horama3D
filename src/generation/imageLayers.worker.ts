@@ -1,5 +1,13 @@
 /// <reference lib="webworker" />
 
+import {
+  assignFrameToColor,
+  buildBackingMask,
+  countMaskPixels,
+  removeDiagonalContacts,
+} from './imageLayersGeometry';
+import { collapseIncidentalPalette } from './imagePalette';
+
 interface WorkerRequest {
   id: number;
   input: ArrayBuffer;
@@ -7,13 +15,11 @@ interface WorkerRequest {
   params: {
     colorCount: number;
     widthMm: number;
-    layerHeightMm: number;
+    baseThicknessMm: number;
+    colorThicknessMm: number;
     detailPreset: string;
     frameWidthMm: number;
     backgroundStrategy: string;
-    layerOrderStrategy: string;
-    topBorder: boolean;
-    topBorderHeightMm: number;
   };
 }
 
@@ -78,44 +84,54 @@ async function generateLayers(request: WorkerRequest) {
   }
   if (visibleCount === 0) throw new Error('La imagen no contiene píxeles visibles.');
 
-  const { palette, labels } = quantize(rgba, visible, params.colorCount);
+  const quantized = quantize(rgba, visible, params.colorCount);
+  const { palette, labels } = collapseIncidentalPalette(
+    quantized.palette,
+    quantized.labels,
+    visible,
+  );
   const filteredLabels = modeFilter(labels, visible, width, height);
   const minimumRegionArea = params.detailPreset === 'high' ? 6 : params.detailPreset === 'draft' ? 18 : 10;
   let specs = buildLayerSpecs(palette, filteredLabels, visible, width, height, minimumRegionArea);
   if (specs.length < 2) throw new Error('La imagen necesita al menos dos regiones de color distinguibles.');
-  specs = orderLayers(specs, filteredLabels, visible, width, height, params);
+  specs = orderParts(specs, filteredLabels, visible, width, height, params);
 
   const pixelSizeMm = params.widthMm / width;
   const heightMm = height * pixelSizeMm;
   const frame = rectangularFrame(width, height, Math.ceil(params.frameWidthMm / pixelSizeMm));
-  const masks = buildBackfillMasks(specs.map((spec) => spec.mask), frame);
-  const parts: GeneratedPart[] = specs.map((spec, index) => {
-    const zMinMm = index * params.layerHeightMm;
-    const zMaxMm = zMinMm + params.layerHeightMm;
-    const name = `plate_${String(index + 1).padStart(2, '0')}_${spec.colorHex.slice(1).toLowerCase()}`;
+  const surfaceMasks = removeDiagonalContacts(
+    assignFrameToColor(specs.map((spec) => spec.mask), frame),
+    width,
+    height,
+  );
+  specs = specs.map((spec, index) => ({
+    ...spec,
+    mask: surfaceMasks[index],
+    pixelCount: countMaskPixels(surfaceMasks[index]),
+  })).filter((spec) => spec.pixelCount > 0);
+
+  const backing = buildBackingMask(width, height);
+  const baseColor = specs[0].colorHex;
+  const parts: GeneratedPart[] = [{
+    name: `base_${baseColor.slice(1).toLowerCase()}`,
+    color: baseColor,
+    buffer: maskToBinaryStl(backing, width, height, pixelSizeMm, 0, params.baseThicknessMm),
+    pixelCount: countMaskPixels(backing),
+    zMinMm: 0,
+    zMaxMm: params.baseThicknessMm,
+  }, ...specs.map((spec, index) => {
+    const zMinMm = params.baseThicknessMm;
+    const zMaxMm = zMinMm + params.colorThicknessMm;
+    const name = `color_${String(index + 1).padStart(2, '0')}_${spec.colorHex.slice(1).toLowerCase()}`;
     return {
       name,
       color: spec.colorHex,
-      buffer: maskToBinaryStl(masks[index], width, height, pixelSizeMm, zMinMm, zMaxMm),
+      buffer: maskToBinaryStl(spec.mask, width, height, pixelSizeMm, zMinMm, zMaxMm),
       pixelCount: spec.pixelCount,
       zMinMm,
       zMaxMm,
     };
-  });
-
-  if (params.topBorder && params.frameWidthMm > 0) {
-    const previous = parts[parts.length - 1];
-    const zMinMm = previous.zMaxMm;
-    const zMaxMm = zMinMm + params.topBorderHeightMm;
-    parts.push({
-      name: `plate_${String(parts.length + 1).padStart(2, '0')}_${previous.color.slice(1).toLowerCase()}_top_border`,
-      color: previous.color,
-      buffer: maskToBinaryStl(frame, width, height, pixelSizeMm, zMinMm, zMaxMm),
-      pixelCount: countMask(frame),
-      zMinMm,
-      zMaxMm,
-    });
-  }
+  })];
 
   return {
     parts,
@@ -126,14 +142,16 @@ async function generateLayers(request: WorkerRequest) {
       processed_height_px: height,
       width_mm: params.widthMm,
       height_mm: heightMm,
-      layer_height_mm: params.layerHeightMm,
+      base_thickness_mm: params.baseThicknessMm,
+      color_thickness_mm: params.colorThicknessMm,
       color_count: new Set(parts.map((part) => part.color)).size,
       layer_count: parts.length,
       colors: [...new Set(parts.map((part) => part.color))],
     },
     warnings: [
-      'Las capas fueron cuantizadas, limpiadas y extruidas localmente en este navegador.',
-      'El 3MF conserva cada capa como objeto separado con un color de material aproximado.',
+      'La imagen fue reducida a una paleta imprimible y colocada sobre un respaldo sólido.',
+      'El 3MF conserva una cara multicolor con partes exclusivas, alineadas y asignadas a filamentos distintos.',
+      `Asignación sugerida: ${specs.map((spec, index) => `Filamento ${index + 1} ${spec.colorHex}`).join(', ')}. Bambu Studio usará el color real cargado en cada ranura; confirma la correspondencia antes de laminar.`,
     ],
   };
 }
@@ -259,7 +277,7 @@ function removeSmallComponents(mask: Uint8Array, width: number, height: number, 
   return result;
 }
 
-function orderLayers(
+function orderParts(
   specs: LayerSpec[], labels: Uint8Array, visible: Uint8Array, width: number, height: number,
   params: WorkerRequest['params'],
 ): LayerSpec[] {
@@ -278,10 +296,9 @@ function orderLayers(
     if (bestLabel >= 0) background = specs.find((spec) => spec.paletteIndex === bestLabel);
   }
   const remaining = specs.filter((spec) => spec !== background);
-  if (params.layerOrderStrategy === 'light_on_top') remaining.sort((a, b) => a.luminance - b.luminance);
-  else remaining.sort((a, b) => b.luminance - a.luminance);
+  remaining.sort((a, b) => b.pixelCount - a.pixelCount);
   if (!background) return remaining;
-  return [{ ...background, mask: visible.slice(), pixelCount: countMask(visible) }, ...remaining];
+  return [background, ...remaining];
 }
 
 function rectangularFrame(width: number, height: number, requested: number): Uint8Array {
@@ -291,16 +308,6 @@ function rectangularFrame(width: number, height: number, requested: number): Uin
     if (row < size || row >= height - size || col < size || col >= width - size) frame[row * width + col] = 1;
   }
   return frame;
-}
-
-function buildBackfillMasks(masks: Uint8Array[], frame: Uint8Array): Uint8Array[] {
-  const result = new Array<Uint8Array>(masks.length);
-  const support = frame.slice();
-  for (let layer = masks.length - 1; layer >= 0; layer -= 1) {
-    for (let index = 0; index < support.length; index += 1) if (masks[layer][index]) support[index] = 1;
-    result[layer] = support.slice();
-  }
-  return result;
 }
 
 function maskToBinaryStl(mask: Uint8Array, width: number, height: number, pixel: number, z0: number, z1: number): ArrayBuffer {

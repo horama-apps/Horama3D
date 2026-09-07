@@ -49,15 +49,13 @@ export async function generateImageLayersLocally(
         input,
         mimeType: file.type || mimeTypeFromName(file.name),
         params: {
-          colorCount: boundedInteger(params.color_count, 2, 16, 8),
+          colorCount: boundedInteger(params.color_count, 2, 4, 4),
           widthMm: boundedNumber(params.width_mm, 20, 400, 120),
-          layerHeightMm: boundedNumber(params.layer_height_mm, 0.2, 5, 1.2),
+          baseThicknessMm: boundedNumber(params.base_thickness_mm, 0.8, 4, 1.6),
+          colorThicknessMm: boundedNumber(params.color_thickness_mm, 0.2, 1, 0.4),
           detailPreset: String(params.detail_preset ?? 'balanced'),
           frameWidthMm: boundedNumber(params.frame_width_mm, 0, 30, 4),
           backgroundStrategy: String(params.background_strategy ?? 'border'),
-          layerOrderStrategy: String(params.layer_order_strategy ?? 'dark_on_top'),
-          topBorder: Boolean(params.top_border),
-          topBorderHeightMm: boundedNumber(params.top_border_height_mm, 0.2, 20, 3),
         },
       }, [input]);
     });
