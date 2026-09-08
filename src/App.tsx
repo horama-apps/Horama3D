@@ -176,7 +176,6 @@ export function App() {
   });
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
-  const [uploadedSleeveBodyFile, setUploadedSleeveBodyFile] = useState<File | null>(null);
   const [status, setStatus] = useState(
     t('status.loadStl'),
   );
@@ -192,7 +191,6 @@ export function App() {
   const [modelObjectBounds, setModelObjectBounds] = useState<ModelObjectBounds[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
-  const sleeveBodyInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedUrlRef = useRef<string | null>(null);
   const localUrlRefs = useRef<Set<string>>(new Set());
   const downloadMenuRef = useRef<HTMLDivElement | null>(null);
@@ -218,7 +216,7 @@ export function App() {
     productType === 'head_keychains' && Boolean(uploadedFile);
   const isLocked =
     isWipProduct ||
-    (productType === 'tap_to_pay_sleeve' && (!uploadedImageFile || !uploadedSleeveBodyFile)) ||
+    (productType === 'tap_to_pay_sleeve' && !uploadedImageFile) ||
     (requiresUploadedModel && !isModelValidated && !canUseInvalidStlForHead);
   const cutHeightMin =
     modelBounds && productType === 'clicker'
@@ -572,7 +570,7 @@ export function App() {
         productType === 'image_layers'
           ? await generateImageLayersLocally(uploadedImageFile as File, params)
         : productType === 'tap_to_pay_sleeve'
-          ? await generateTapToPaySleeveLocally(uploadedImageFile as File, uploadedSleeveBodyFile, params)
+          ? await generateTapToPaySleeveLocally(uploadedImageFile as File, params)
         : productType === 'brand_decoration'
           ? await generateBrandDecorationLocally(
               uploadedImageFile as File,
@@ -725,13 +723,11 @@ export function App() {
 
     if (isImageProduct(nextType)) {
       setActiveModel({ source: 'empty', format: 'stl' });
-      const ready = Boolean(uploadedImageFile) && (nextType !== 'tap_to_pay_sleeve' || Boolean(uploadedSleeveBodyFile));
+      const ready = Boolean(uploadedImageFile);
       setIsModelValidated(ready);
       setStatus(!uploadedImageFile
         ? t('status.loadImage')
-        : nextType === 'tap_to_pay_sleeve' && !uploadedSleeveBodyFile
-          ? t('status.loadSleeveBody')
-          : t('status.imageReady'));
+        : t('status.imageReady'));
       setDownloadFormat('3mf');
       return;
     }
@@ -820,7 +816,7 @@ export function App() {
       return;
     }
 
-    if (isImageProduct(productType) && uploadedImageFile && (productType !== 'tap_to_pay_sleeve' || uploadedSleeveBodyFile)) {
+    if (isImageProduct(productType) && uploadedImageFile) {
       setActiveModel({ source: 'empty', format: 'stl' });
       setIsModelValidated(true);
       setStatus(t('status.imageReady'));
@@ -936,25 +932,10 @@ export function App() {
     }
     setUploadedImageFile(file);
     setActiveModel({ source: 'empty', format: 'stl' });
-    setIsModelValidated(productType !== 'tap_to_pay_sleeve' || Boolean(uploadedSleeveBodyFile));
+    setIsModelValidated(true);
     setShouldCollapseSetup(false);
     setDownloadFormat('3mf');
-    setStatus(productType === 'tap_to_pay_sleeve' && !uploadedSleeveBodyFile
-      ? t('status.loadSleeveBody')
-      : t('status.imageReady'));
-  };
-
-  const loadSleeveBodyFile = (file: File | undefined) => {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.stl')) {
-      setStatus(t('upload.selectSleeveBody'));
-      if (sleeveBodyInputRef.current) sleeveBodyInputRef.current.value = '';
-      return;
-    }
-    setUploadedSleeveBodyFile(file);
-    setActiveModel({ source: 'empty', format: 'stl' });
-    setIsModelValidated(Boolean(uploadedImageFile));
-    setStatus(uploadedImageFile ? t('status.imageReady') : t('status.loadImage'));
+    setStatus(t('status.imageReady'));
   };
 
   const runDownload = async (format = downloadFormat) => {
@@ -1107,23 +1088,6 @@ export function App() {
                 ? uploadedImageFile?.name ?? t('upload.selectImage')
                 : uploadedFile?.name ?? t('upload.select')}
             </p>
-            </div>
-          ) : null}
-
-          {productType === 'tap_to_pay_sleeve' ? (
-            <div className='upload-card'>
-              <input
-                ref={sleeveBodyInputRef}
-                className='file-input'
-                type='file'
-                accept='.stl,model/stl,application/vnd.ms-pki.stl'
-                onChange={(event) => loadSleeveBodyFile(event.target.files?.[0])}
-              />
-              <button className='upload-button' onClick={() => sleeveBodyInputRef.current?.click()}>
-                <FileUp size={18} />
-                {t('upload.loadSleeveBody')}
-              </button>
-              <p>{uploadedSleeveBodyFile?.name ?? t('upload.selectSleeveBody')}</p>
             </div>
           ) : null}
 
@@ -1297,9 +1261,7 @@ export function App() {
             {isWipProduct
               ? t('common.workInProgress')
               : isImageProduct(productType)
-                ? productType === 'tap_to_pay_sleeve' && uploadedImageFile && !uploadedSleeveBodyFile
-                  ? t('status.loadSleeveBody')
-                  : t('status.loadImage')
+                ? t('status.loadImage')
                 : t('status.loadValidStl')}
           </div>
         )}

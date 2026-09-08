@@ -510,6 +510,13 @@ export const products: ProductDefinition[] = [
     description: 'Turn an image into a slim multicolor credit-card sleeve ready for the slicer.',
     accent: IMAGE_LAYERS_ACCENT_COLOR,
     params: [
+      {
+        kind: 'select', key: 'sleeve_body_style', label: 'Sleeve body', defaultValue: 'slim',
+        options: [
+          { label: 'Slim', value: 'slim' },
+          { label: 'Reinforced', value: 'reinforced' },
+        ],
+      },
       { kind: 'number', key: 'color_count', label: 'Maximum material colors', min: 2, max: 8, step: 1, defaultValue: 4 },
       {
         kind: 'select', key: 'image_fit', label: 'Image fit', defaultValue: 'cover',

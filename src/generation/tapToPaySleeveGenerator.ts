@@ -18,13 +18,16 @@ let requestId = 0;
 
 export async function generateTapToPaySleeveLocally(
   file: File,
-  bodyFile: File | null,
   params: ProductParams,
 ): Promise<GeneratedModel> {
+  const input = await file.arrayBuffer();
+  const bodyStyle = params.sleeve_body_style === 'reinforced' ? 'reinforced' : 'slim';
+  const bodyName = bodyStyle === 'reinforced' ? 'card-sleeve-reinforced.stl' : 'card-sleeve-slim.stl';
+  const bodyResponse = await fetch(`/tap-to-pay-assets/${bodyName}`);
+  if (!bodyResponse.ok) throw new Error('No se pudo cargar el cuerpo incluido del portatarjeta.');
+  const bodyInput = await bodyResponse.arrayBuffer();
   const worker = new Worker(new URL('./tapToPaySleeve.worker.ts', import.meta.url), { type: 'module' });
   const id = ++requestId;
-  const input = await file.arrayBuffer();
-  const bodyInput = bodyFile ? await bodyFile.arrayBuffer() : undefined;
   try {
     const response = await new Promise<SleeveWorkerResponse>((resolve, reject) => {
       const timeout = window.setTimeout(
@@ -44,7 +47,7 @@ export async function generateTapToPaySleeveLocally(
         id,
         input,
         bodyInput,
-        bodyName: bodyFile?.name,
+        bodyName,
         mimeType: file.type || mimeTypeFromName(file.name),
         params: {
           colorCount: boundedInteger(params.color_count, 2, 8, 4),
@@ -56,7 +59,7 @@ export async function generateTapToPaySleeveLocally(
           colorThicknessMm: boundedNumber(params.color_thickness_mm, 0.2, 0.6, 0.4),
           openingSide: params.opening_side === 'left' ? 'left' : 'right',
         },
-      }, bodyInput ? [input, bodyInput] : [input]);
+      }, [input, bodyInput]);
     });
     if (response.error) throw new Error(response.error);
     if (!response.parts?.length || !response.metadata) {
