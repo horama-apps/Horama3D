@@ -64,9 +64,13 @@ function countInvalidStlEdges(buffer) {
     const base = 84 + index * 50 + 12;
     const vertices = [vertex(base), vertex(base + 12), vertex(base + 24)];
     for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
-      const edge = vertices[a] < vertices[b] ? `${vertices[a]}|${vertices[b]}` : `${vertices[b]}|${vertices[a]}`;
-      edges.set(edge, (edges.get(edge) ?? 0) + 1);
+      const forward = vertices[a] < vertices[b];
+      const edge = forward ? `${vertices[a]}|${vertices[b]}` : `${vertices[b]}|${vertices[a]}`;
+      const current = edges.get(edge) ?? { count: 0, orientation: 0 };
+      current.count += 1;
+      current.orientation += forward ? 1 : -1;
+      edges.set(edge, current);
     }
   }
-  return [...edges.values()].filter((count) => count !== 2).length;
+  return [...edges.values()].filter(({ count, orientation }) => count !== 2 || orientation !== 0).length;
 }

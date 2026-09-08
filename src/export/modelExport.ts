@@ -201,16 +201,24 @@ function validateMulticolorMeshes(meshes: AssignedMesh[], maximumColors: number)
     throw new Error(`The multicolor 3MF must contain between two and ${maximumColors} filament colors.`);
   }
   for (const { part, mesh } of meshes) {
-    const edgeCounts = new Map<string, number>();
+    const edges = new Map<string, { count: number; orientation: number }>();
     for (const [first, second, third] of mesh.triangles) {
       for (const [a, b] of [[first, second], [second, third], [third, first]]) {
-        const key = a < b ? `${a}:${b}` : `${b}:${a}`;
-        edgeCounts.set(key, (edgeCounts.get(key) ?? 0) + 1);
+        const forward = a < b;
+        const key = forward ? `${a}:${b}` : `${b}:${a}`;
+        const current = edges.get(key) ?? { count: 0, orientation: 0 };
+        current.count += 1;
+        current.orientation += forward ? 1 : -1;
+        edges.set(key, current);
       }
     }
-    const invalidEdges = [...edgeCounts.values()].filter((count) => count !== 2).length;
+    const invalidEdges = [...edges.values()].filter(({ count }) => count !== 2).length;
     if (invalidEdges > 0) {
       throw new Error(`${part.object ?? part.filename} contains ${invalidEdges} non-manifold edges.`);
+    }
+    const inconsistentEdges = [...edges.values()].filter(({ orientation }) => orientation !== 0).length;
+    if (inconsistentEdges > 0) {
+      throw new Error(`${part.object ?? part.filename} contains ${inconsistentEdges} inconsistently oriented edges.`);
     }
   }
 }

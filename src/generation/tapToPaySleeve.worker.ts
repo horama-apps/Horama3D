@@ -595,25 +595,32 @@ function maskToGridBinaryStl(
     quad([x0,y1,z0],[x1,y1,z0],[x1,y0,z0],[x0,y0,z0]);
     if (row === 0 || !mask[index-width]) quad([x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]);
     if (row === height-1 || !mask[index+width]) quad([x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[x0,y0,z0]);
-    if (column === 0 || !mask[index-1]) quad([x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]);
-    if (column === width-1 || !mask[index+1]) quad([x1,y1,z0],[x1,y0,z0],[x1,y0,z1],[x1,y1,z1]);
+    if (column === 0 || !mask[index-1]) quad([x0,y1,z0],[x0,y0,z0],[x0,y0,z1],[x0,y1,z1]);
+    if (column === width-1 || !mask[index+1]) quad([x1,y0,z0],[x1,y1,z0],[x1,y1,z1],[x1,y0,z1]);
   }
   return buffer;
 }
 
 function hasInvalidBinaryStlEdges(buffer: ArrayBuffer): boolean {
   const view = new DataView(buffer);
-  const edgeCounts = new Map<string, number>();
+  const edges = new Map<string, { count: number; orientation: number }>();
   const vertexKey = (offset: number) => `${view.getFloat32(offset, true)},${view.getFloat32(offset + 4, true)},${view.getFloat32(offset + 8, true)}`;
   for (let triangle = 0; triangle < view.getUint32(80, true); triangle += 1) {
     const base = 84 + triangle * 50 + 12;
     const vertices = [vertexKey(base), vertexKey(base + 12), vertexKey(base + 24)];
     for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
-      const edge = vertices[a] < vertices[b] ? `${vertices[a]}|${vertices[b]}` : `${vertices[b]}|${vertices[a]}`;
-      edgeCounts.set(edge, (edgeCounts.get(edge) ?? 0) + 1);
+      const forward = vertices[a] < vertices[b];
+      const edge = forward ? `${vertices[a]}|${vertices[b]}` : `${vertices[b]}|${vertices[a]}`;
+      const current = edges.get(edge) ?? { count: 0, orientation: 0 };
+      current.count += 1;
+      current.orientation += forward ? 1 : -1;
+      edges.set(edge, current);
     }
   }
-  return [...edgeCounts.values()].some((count) => count !== 2);
+  // A printable closed mesh needs exactly two oppositely directed faces on every edge.
+  // Merely counting two faces allowed inside-out patches through, which Bambu Studio
+  // displayed correctly but only applied as scattered modifier regions when slicing.
+  return [...edges.values()].some(({ count, orientation }) => count !== 2 || orientation !== 0);
 }
 
 function maskToVectorBinaryStl(
@@ -823,8 +830,8 @@ function layeredMasksToBinaryStl(
       if (!below?.[index]) quad([x0,y1,layer.z0],[x1,y1,layer.z0],[x1,y0,layer.z0],[x0,y0,layer.z0]);
       if (row === 0 || !layer.mask[index-width]) quad([x0,y1,layer.z0],[x0,y1,layer.z1],[x1,y1,layer.z1],[x1,y1,layer.z0]);
       if (row === height-1 || !layer.mask[index+width]) quad([x1,y0,layer.z0],[x1,y0,layer.z1],[x0,y0,layer.z1],[x0,y0,layer.z0]);
-      if (column === 0 || !layer.mask[index-1]) quad([x0,y0,layer.z0],[x0,y1,layer.z0],[x0,y1,layer.z1],[x0,y0,layer.z1]);
-      if (column === width-1 || !layer.mask[index+1]) quad([x1,y1,layer.z0],[x1,y0,layer.z0],[x1,y0,layer.z1],[x1,y1,layer.z1]);
+      if (column === 0 || !layer.mask[index-1]) quad([x0,y1,layer.z0],[x0,y0,layer.z0],[x0,y0,layer.z1],[x0,y1,layer.z1]);
+      if (column === width-1 || !layer.mask[index+1]) quad([x1,y0,layer.z0],[x1,y1,layer.z0],[x1,y1,layer.z1],[x1,y0,layer.z1]);
     }
   });
   return buffer;
