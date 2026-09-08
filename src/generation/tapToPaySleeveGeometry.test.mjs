@@ -7,6 +7,7 @@ import {
   maskOverlapCount,
   normalizeDiagonalLabels,
   removeDiagonalMaskContacts,
+  replaceBorderConnectedLabel,
   rearRailMask,
   roundedRectangleMask,
 } from './tapToPaySleeveGeometry.ts';
@@ -80,4 +81,18 @@ test('normalizes diagonal contacts at the rounded-mask boundary', () => {
   assert.equal(maskOverlapCount(masks), 0);
   assert.equal(masks.reduce((sum, mask) => sum + mask.reduce((a, b) => a + b, 0), 0), 3);
   assert.notEqual(normalized[1], normalized[2]);
+});
+
+test('absorbs only the border-connected image background into the dominant body color', () => {
+  const active = new Uint8Array(25).fill(1);
+  const labels = Uint8Array.from([
+    1, 1, 1, 1, 1,
+    1, 0, 0, 0, 1,
+    1, 0, 1, 0, 1,
+    1, 0, 0, 0, 1,
+    1, 1, 1, 1, 1,
+  ]);
+  const replaced = replaceBorderConnectedLabel(labels, active, 5, 5, 1, 0);
+  assert.equal(replaced[0], 0);
+  assert.equal(replaced[12], 1);
 });

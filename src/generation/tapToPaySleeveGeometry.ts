@@ -121,6 +121,45 @@ export function labelsToMasks(
   return masks;
 }
 
+export function replaceBorderConnectedLabel(
+  labels: Uint8Array,
+  active: Uint8Array,
+  width: number,
+  height: number,
+  sourceLabel: number,
+  targetLabel: number,
+): Uint8Array {
+  if (sourceLabel === targetLabel) return labels.slice();
+  const result = labels.slice();
+  const visited = new Uint8Array(labels.length);
+  const queue = new Int32Array(labels.length);
+  let head = 0;
+  let tail = 0;
+  const enqueue = (index: number) => {
+    if (!active[index] || visited[index] || result[index] !== sourceLabel) return;
+    visited[index] = 1;
+    queue[tail++] = index;
+  };
+  for (let row = 0; row < height; row += 1) for (let column = 0; column < width; column += 1) {
+    const index = row * width + column;
+    if (!active[index] || result[index] !== sourceLabel) continue;
+    const touchesBoundary = row === 0 || row === height - 1 || column === 0 || column === width - 1
+      || !active[index - width] || !active[index + width] || !active[index - 1] || !active[index + 1];
+    if (touchesBoundary) enqueue(index);
+  }
+  while (head < tail) {
+    const current = queue[head++];
+    result[current] = targetLabel;
+    const row = Math.floor(current / width);
+    const column = current % width;
+    if (row > 0) enqueue(current - width);
+    if (row + 1 < height) enqueue(current + width);
+    if (column > 0) enqueue(current - 1);
+    if (column + 1 < width) enqueue(current + 1);
+  }
+  return result;
+}
+
 export function removeDiagonalMaskContacts(
   mask: Uint8Array,
   width: number,

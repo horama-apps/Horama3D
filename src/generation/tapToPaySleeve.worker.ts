@@ -16,6 +16,7 @@ import {
   labelsToMasks,
   addEntryDetents,
   normalizeDiagonalLabels,
+  replaceBorderConnectedLabel,
   removeDiagonalMaskContacts,
   rearRailMask,
   roundedRectangleMask,
@@ -152,6 +153,24 @@ export function generateTapToPaySleeveFromPixels(
     height,
     params.backgroundStrategy,
   );
+  if (params.backgroundStrategy === 'dominant') {
+    const borderLabel = chooseBackgroundLabel(
+      labels,
+      outerMask,
+      preserved.palette.length,
+      width,
+      height,
+      'border',
+    );
+    labels = replaceBorderConnectedLabel(
+      labels,
+      outerMask,
+      width,
+      height,
+      borderLabel,
+      backgroundLabel,
+    );
+  }
   labels = relabelSmallComponents(
     labels,
     outerMask,
@@ -212,13 +231,14 @@ export function generateTapToPaySleeveFromPixels(
     { mask: wallMask, z0: faceTop, z1: lipBottom },
     { mask: lipMask, z0: lipBottom, z1: totalThicknessMm },
   ], width, height, pixelWidthMm, pixelHeightMm);
+  const modifierSpecs = template ? specs.filter((spec) => spec !== background) : specs;
   const parts: GeneratedPart[] = [
     {
       name: `body_${bodyColor.slice(1).toLowerCase()}`,
       color: bodyColor,
       buffer: generatedBody,
     },
-    ...specs.map((spec, index) => ({
+    ...modifierSpecs.map((spec, index) => ({
       name: `color_${String(index + 1).padStart(2, '0')}_${spec.colorHex.slice(1).toLowerCase()}`,
       color: spec.colorHex,
       buffer: maskToBinaryStl(spec.mask, width, height, pixelWidthMm, pixelHeightMm, 0, surfaceTop),

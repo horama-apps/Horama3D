@@ -35,6 +35,24 @@ test('generates one manifold card body plus four printable color parts', () => {
   assert.ok(generated.metadata.colors.some((hex) => parseInt(hex.slice(1, 3), 16) < 60));
   assert.ok(Math.abs(generated.metadata.effective_clearance_z_mm - 0.35) < 1e-6);
   for (const part of generated.parts) assert.equal(countInvalidStlEdges(part.buffer), 0, part.name);
+
+  const templated = generateTapToPaySleeveFromPixels(rgba, 800, 500, width, height, {
+    colorCount: 4,
+    fitMode: 'cover',
+    detailPreset: 'balanced',
+    backgroundStrategy: 'dominant',
+    cardClearanceMm: 0.35,
+    faceThicknessMm: 0.6,
+    colorThicknessMm: 0.4,
+    openingSide: 'right',
+  }, {
+    bodyBuffer: generated.parts[0].buffer,
+    outerWidthMm: 86.6,
+    outerHeightMm: 56.5,
+    totalThicknessMm: 1.84,
+  });
+  assert.equal(templated.parts.length, templated.metadata.color_count);
+  assert.ok(templated.parts.slice(1).every((part) => part.color !== templated.parts[0].color));
 });
 
 function countInvalidStlEdges(buffer) {
