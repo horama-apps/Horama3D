@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import type { ManifoldToplevel } from 'manifold-3d';
 import type { GeneratedModel, PreviewFile, ProductParams, ProductType } from '../types';
 import bambuA1MiniProjectSettings from './bambuA1MiniProjectSettings.json';
 import {
@@ -60,6 +62,8 @@ interface ParsedMesh {
   roleConfidence: 'explicit' | 'fallback';
   mesh: MeshData;
 }
+
+let manifoldModulePromise: Promise<ManifoldToplevel> | undefined;
 
 type KeychainPlacement = 'bottom' | 'top';
 
@@ -135,13 +139,16 @@ async function export3mf(
   const parsedMeshes = await Promise.all(
     parts.map(async (part) => {
       const bytes = await fetchBytes(part.url);
-      const geometry = loader.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
       const roleResult = getPartRole(productType, part);
+      const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      const mesh = productType === 'tap_to_pay_sleeve' && roleResult.role === 'body'
+        ? await stlToManifoldMeshData(buffer)
+        : geometryToMeshData(loader.parse(buffer));
       return {
         part,
         role: roleResult.role,
         roleConfidence: roleResult.confidence,
-        mesh: geometryToMeshData(geometry),
+        mesh,
       };
     }),
   );
@@ -343,6 +350,90 @@ function geometryToMeshData(geometry: THREE.BufferGeometry): MeshData {
       centerZ: Number.isFinite(minZ) && Number.isFinite(maxZ) ? (minZ + maxZ) / 2 : 0,
     },
   };
+}
+
+async function stlToManifoldMeshData(buffer: ArrayBuffer): Promise<MeshData> {
+  const wasm = await getManifoldModule();
+  const parsed = new STLLoader().parse(buffer);
+  parsed.deleteAttribute('normal');
+  const geometry = mergeVertices(parsed, 1e-5);
+  parsed.dispose();
+  const position = geometry.getAttribute('position');
+  const index = geometry.getIndex();
+  if (!index || position.count < 4 || index.count < 12) {
+    geometry.dispose();
+    throw new Error('The card-sleeve body does not contain a valid solid mesh.');
+  }
+
+  const vertProperties = new Float32Array(position.count * 3);
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    vertProperties[vertex * 3] = position.getX(vertex);
+    vertProperties[vertex * 3 + 1] = position.getY(vertex);
+    vertProperties[vertex * 3 + 2] = position.getZ(vertex);
+  }
+  const triVerts = new Uint32Array(index.count);
+  for (let triangle = 0; triangle < index.count; triangle += 1) triVerts[triangle] = index.getX(triangle);
+  geometry.dispose();
+
+  const inputMesh = new wasm.Mesh({ numProp: 3, vertProperties, triVerts });
+  inputMesh.merge();
+  const manifold = new wasm.Manifold(inputMesh);
+  try {
+    if (manifold.status() !== 'NoError' || manifold.numTri() === 0) {
+      throw new Error('The card-sleeve body could not be repaired as a closed solid.');
+    }
+    const mesh = manifold.getMesh();
+    const vertices: THREE.Vector3[] = [];
+    const min = new THREE.Vector3(Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY);
+    const max = new THREE.Vector3(Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY);
+    for (let vertex = 0; vertex < mesh.vertProperties.length / mesh.numProp; vertex += 1) {
+      const start = vertex * mesh.numProp;
+      const point = new THREE.Vector3(
+        mesh.vertProperties[start],
+        mesh.vertProperties[start + 1],
+        mesh.vertProperties[start + 2],
+      );
+      vertices.push(point);
+      min.min(point);
+      max.max(point);
+    }
+    const triangles: Array<[number, number, number]> = [];
+    for (let offset = 0; offset < mesh.triVerts.length; offset += 3) {
+      triangles.push([
+        mesh.triVerts[offset],
+        mesh.triVerts[offset + 1],
+        mesh.triVerts[offset + 2],
+      ]);
+    }
+    return {
+      vertices,
+      triangles,
+      bounds: {
+        min,
+        max,
+        minZ: min.z,
+        maxZ: max.z,
+        centerZ: (min.z + max.z) / 2,
+      },
+    };
+  } finally {
+    manifold.delete();
+  }
+}
+
+async function getManifoldModule(): Promise<ManifoldToplevel> {
+  if (!manifoldModulePromise) {
+    manifoldModulePromise = Promise.all([
+      import('manifold-3d'),
+      import('manifold-3d/manifold.wasm?url'),
+    ]).then(([{ default: Module }, { default: manifoldWasmUrl }]) => (
+      Module({ locateFile: () => manifoldWasmUrl })
+    )).then((wasm) => {
+      wasm.setup();
+      return wasm;
+    });
+  }
+  return manifoldModulePromise;
 }
 
 function addKeychainLoopToClickerMeshes(
