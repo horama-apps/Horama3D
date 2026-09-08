@@ -23,7 +23,7 @@ export async function generateTapToPaySleeveLocally(
   const input = await file.arrayBuffer();
   const bodyStyle = params.sleeve_body_style === 'reinforced' ? 'reinforced' : 'slim';
   const bodyName = bodyStyle === 'reinforced' ? 'card-sleeve-reinforced.stl' : 'card-sleeve-slim.stl';
-  const bodyResponse = await fetch(`/tap-to-pay-assets/${bodyName}`);
+  const bodyResponse = await fetch(`${import.meta.env.BASE_URL}tap-to-pay-assets/${bodyName}`);
   if (!bodyResponse.ok) throw new Error('No se pudo cargar el cuerpo incluido del portatarjeta.');
   const bodyInput = await bodyResponse.arrayBuffer();
   const worker = new Worker(new URL('./tapToPaySleeve.worker.ts', import.meta.url), { type: 'module' });
