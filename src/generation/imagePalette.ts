@@ -89,7 +89,13 @@ export function reinforceDarkLineArt(
   for (let index = 0; index < visible.length; index += 1) {
     if (!visible[index]) continue;
     const offset = index * 4;
-    if (luminance([rgba[offset], rgba[offset + 1], rgba[offset + 2]]) <= maximumSourceLuminance) {
+    const source: RgbColor = [rgba[offset], rgba[offset + 1], rgba[offset + 2]];
+    const sourceLuminance = luminance(source);
+    const sourceChroma = Math.max(...source) - Math.min(...source);
+    // Always retain genuinely dark pixels, while only treating mid-dark pixels as
+    // line antialiasing when they are reasonably neutral. Saturated accents such
+    // as red bows must remain eligible for their own filament instead of becoming black.
+    if (sourceLuminance <= 85 || (sourceLuminance <= maximumSourceLuminance && sourceChroma <= 64)) {
       result[index] = darkest;
     }
   }

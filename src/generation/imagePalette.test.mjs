@@ -27,6 +27,17 @@ test('keeps antialiased dark strokes assigned to the black filament', () => {
   assert.deepEqual([...labels], [0, 3, 1]);
 });
 
+test('does not turn a saturated red accent into black line art', () => {
+  const palette = [[243, 132, 164], [25, 9, 10], [232, 113, 78], [247, 218, 198]];
+  const rgba = new Uint8ClampedArray([
+    245, 92, 72, 255,
+    95, 78, 74, 255,
+    20, 18, 18, 255,
+  ]);
+  const labels = reinforceDarkLineArt(Uint8Array.from([2, 3, 0]), rgba, new Uint8Array(3).fill(1), palette);
+  assert.deepEqual([...labels], [2, 1, 1]);
+});
+
 test('restores black assignments after an antialias palette was collapsed', () => {
   const rgba = new Uint8ClampedArray([
     254, 212, 32, 255,

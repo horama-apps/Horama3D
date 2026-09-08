@@ -966,8 +966,10 @@ function buildBambuProjectSettingsJson(materials: ExportMaterial[]): string {
     flush_volumes_vector: Array.from({ length: materialCount * 2 }, () => '140'),
     single_extruder_multi_material: materialCount > 1 ? '1' : '0',
     top_color_penetration_layers: '5',
-    wipe_tower_x: ['19.2'],
-    wipe_tower_y: ['110'],
+    // Keep enough vertical room for the first-layer bands of up to eight colors
+    // while leaving the card sleeve unobstructed on the compact A1 mini bed.
+    wipe_tower_x: ['10'],
+    wipe_tower_y: ['45'],
   });
   return JSON.stringify(settings, null, 4);
 }
