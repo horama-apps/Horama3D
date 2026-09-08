@@ -16,6 +16,7 @@ import {
   labelsToMasks,
   addEntryDetents,
   normalizeDiagonalLabels,
+  removeDiagonalMaskContacts,
   rearRailMask,
   roundedRectangleMask,
 } from './tapToPaySleeveGeometry.ts';
@@ -164,6 +165,13 @@ export function generateTapToPaySleeveFromPixels(
   );
   labels = normalizeDiagonalLabels(labels, outerMask, width, height);
   const masks = labelsToMasks(labels, outerMask, preserved.palette.length);
+  for (let index = 0; index < masks.length; index += 1) {
+    if (index === backgroundLabel) continue;
+    const cleaned = removeDiagonalMaskContacts(masks[index], width, height);
+    masks[index] = cleaned.mask;
+    for (const removed of cleaned.removed) masks[backgroundLabel][removed] = 1;
+  }
+  masks[backgroundLabel] = removeDiagonalMaskContacts(masks[backgroundLabel], width, height).mask;
   let specs = preserved.palette.map((color, paletteIndex): ColorSpec => ({
     paletteIndex,
     color,
@@ -511,7 +519,84 @@ function chooseBackgroundLabel(
   return best;
 }
 
-function maskToBinaryStl(
+export function maskToBinaryStl(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  pixelWidth: number,
+  pixelHeight: number,
+  z0: number,
+  z1: number,
+): ArrayBuffer {
+  const vectorized = maskToVectorBinaryStl(mask, width, height, pixelWidth, pixelHeight, z0, z1);
+  return hasInvalidBinaryStlEdges(vectorized)
+    ? maskToGridBinaryStl(mask, width, height, pixelWidth, pixelHeight, z0, z1)
+    : vectorized;
+}
+
+function maskToGridBinaryStl(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  pixelWidth: number,
+  pixelHeight: number,
+  z0: number,
+  z1: number,
+): ArrayBuffer {
+  let triangles = countMask(mask) * 4;
+  for (let row = 0; row < height; row += 1) for (let column = 0; column < width; column += 1) {
+    const index = row * width + column;
+    if (!mask[index]) continue;
+    if (row === 0 || !mask[index - width]) triangles += 2;
+    if (row === height - 1 || !mask[index + width]) triangles += 2;
+    if (column === 0 || !mask[index - 1]) triangles += 2;
+    if (column === width - 1 || !mask[index + 1]) triangles += 2;
+  }
+  const buffer = new ArrayBuffer(84 + triangles * 50);
+  const view = new DataView(buffer);
+  new Uint8Array(buffer).set(new TextEncoder().encode('Horama3D tap-to-pay sleeve').slice(0, 80));
+  view.setUint32(80, triangles, true);
+  let offset = 84;
+  const add = (a: number[], b: number[], c: number[]) => {
+    const normal = triangleNormal(a, b, c);
+    for (const value of normal) { view.setFloat32(offset, value, true); offset += 4; }
+    for (const point of [a, b, c]) for (const value of point) { view.setFloat32(offset, value, true); offset += 4; }
+    view.setUint16(offset, 0, true); offset += 2;
+  };
+  const quad = (a: number[], b: number[], c: number[], d: number[]) => { add(a, b, c); add(a, c, d); };
+  for (let row = 0; row < height; row += 1) for (let column = 0; column < width; column += 1) {
+    const index = row * width + column;
+    if (!mask[index]) continue;
+    const x0 = column * pixelWidth;
+    const x1 = (column + 1) * pixelWidth;
+    const y0 = (height - row - 1) * pixelHeight;
+    const y1 = (height - row) * pixelHeight;
+    quad([x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]);
+    quad([x0,y1,z0],[x1,y1,z0],[x1,y0,z0],[x0,y0,z0]);
+    if (row === 0 || !mask[index-width]) quad([x0,y1,z0],[x0,y1,z1],[x1,y1,z1],[x1,y1,z0]);
+    if (row === height-1 || !mask[index+width]) quad([x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[x0,y0,z0]);
+    if (column === 0 || !mask[index-1]) quad([x0,y0,z0],[x0,y1,z0],[x0,y1,z1],[x0,y0,z1]);
+    if (column === width-1 || !mask[index+1]) quad([x1,y1,z0],[x1,y0,z0],[x1,y0,z1],[x1,y1,z1]);
+  }
+  return buffer;
+}
+
+function hasInvalidBinaryStlEdges(buffer: ArrayBuffer): boolean {
+  const view = new DataView(buffer);
+  const edgeCounts = new Map<string, number>();
+  const vertexKey = (offset: number) => `${view.getFloat32(offset, true)},${view.getFloat32(offset + 4, true)},${view.getFloat32(offset + 8, true)}`;
+  for (let triangle = 0; triangle < view.getUint32(80, true); triangle += 1) {
+    const base = 84 + triangle * 50 + 12;
+    const vertices = [vertexKey(base), vertexKey(base + 12), vertexKey(base + 24)];
+    for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) {
+      const edge = vertices[a] < vertices[b] ? `${vertices[a]}|${vertices[b]}` : `${vertices[b]}|${vertices[a]}`;
+      edgeCounts.set(edge, (edgeCounts.get(edge) ?? 0) + 1);
+    }
+  }
+  return [...edgeCounts.values()].some((count) => count !== 2);
+}
+
+function maskToVectorBinaryStl(
   mask: Uint8Array,
   width: number,
   height: number,
@@ -600,14 +685,39 @@ function maskBoundaryLoops(mask: Uint8Array, width: number, height: number): Gri
     while (current[0] !== start[0] || current[1] !== start[1]) {
       loop.push(current);
       const key = `${current[0]},${current[1]}`;
-      const next = edges.get(key);
-      if (!next?.length) throw new Error('No se pudo cerrar el contorno de una región de color.');
-      current = next.pop()!;
-      if (next.length === 0) edges.delete(key);
+      const destinations = edges.get(key);
+      if (!destinations?.length) throw new Error('No se pudo cerrar el contorno de una región de color.');
+      const previous = loop[loop.length - 2];
+      const nextIndex = chooseBoundaryDestination(previous, current, destinations);
+      current = destinations.splice(nextIndex, 1)[0];
+      if (destinations.length === 0) edges.delete(key);
     }
     loops.push(removeCollinearPoints(loop));
   }
   return loops.filter((loop) => loop.length >= 3);
+}
+
+function chooseBoundaryDestination(previous: GridPoint, current: GridPoint, destinations: GridPoint[]): number {
+  const directionIndex = ([x, y]: GridPoint) => {
+    if (x > 0) return 0; // east
+    if (y > 0) return 1; // north
+    if (x < 0) return 2; // west
+    return 3; // south
+  };
+  const incoming = directionIndex([current[0] - previous[0], current[1] - previous[1]]);
+  const priority = [1, 0, 3, 2]; // left, straight, right, reverse
+  let bestIndex = 0;
+  let bestPriority = Number.POSITIVE_INFINITY;
+  destinations.forEach((destination, index) => {
+    const outgoing = directionIndex([destination[0] - current[0], destination[1] - current[1]]);
+    const turn = (outgoing - incoming + 4) % 4;
+    const rank = priority.indexOf(turn);
+    if (rank < bestPriority) {
+      bestPriority = rank;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
 }
 
 function removeCollinearPoints(loop: GridPoint[]): GridPoint[] {

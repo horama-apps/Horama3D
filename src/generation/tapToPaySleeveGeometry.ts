@@ -73,7 +73,7 @@ export function normalizeDiagonalLabels(
   height: number,
 ): Uint8Array {
   const result = labels.slice();
-  for (let pass = 0; pass < 8; pass += 1) {
+  for (let pass = 0; pass < Math.max(8, width + height); pass += 1) {
     let changed = false;
     for (let row = 0; row < height - 1; row += 1) {
       for (let column = 0; column < width - 1; column += 1) {
@@ -81,16 +81,25 @@ export function normalizeDiagonalLabels(
         const topRight = topLeft + 1;
         const bottomLeft = topLeft + width;
         const bottomRight = bottomLeft + 1;
-        if (![topLeft, topRight, bottomLeft, bottomRight].every((index) => active[index])) continue;
         const a = result[topLeft];
         const b = result[topRight];
         const c = result[bottomLeft];
         const d = result[bottomRight];
-        if (a === d && a !== b && a !== c) {
-          result[bottomRight] = c;
+        if (active[topLeft] && active[bottomRight]
+          && a === d
+          && (!active[topRight] || a !== b)
+          && (!active[bottomLeft] || a !== c)) {
+          if (active[bottomLeft]) result[bottomRight] = c;
+          else if (active[topRight]) result[bottomRight] = b;
+          else continue;
           changed = true;
-        } else if (b === c && b !== a && b !== d) {
-          result[bottomLeft] = d;
+        } else if (active[topRight] && active[bottomLeft]
+          && b === c
+          && (!active[topLeft] || b !== a)
+          && (!active[bottomRight] || b !== d)) {
+          if (active[bottomRight]) result[bottomLeft] = d;
+          else if (active[topLeft]) result[bottomLeft] = a;
+          else continue;
           changed = true;
         }
       }
@@ -110,6 +119,47 @@ export function labelsToMasks(
     if (active[index] && labels[index] < masks.length) masks[labels[index]][index] = 1;
   }
   return masks;
+}
+
+export function removeDiagonalMaskContacts(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+): { mask: Uint8Array; removed: number[] } {
+  const result = mask.slice();
+  const removed: number[] = [];
+  const degree = (index: number) => {
+    const row = Math.floor(index / width);
+    const column = index % width;
+    let neighbors = 0;
+    if (row > 0 && result[index - width]) neighbors += 1;
+    if (row + 1 < height && result[index + width]) neighbors += 1;
+    if (column > 0 && result[index - 1]) neighbors += 1;
+    if (column + 1 < width && result[index + 1]) neighbors += 1;
+    return neighbors;
+  };
+  for (let pass = 0; pass < Math.max(width, height); pass += 1) {
+    let changed = false;
+    for (let row = 0; row < height - 1; row += 1) for (let column = 0; column < width - 1; column += 1) {
+      const topLeft = row * width + column;
+      const topRight = topLeft + 1;
+      const bottomLeft = topLeft + width;
+      const bottomRight = bottomLeft + 1;
+      let target = -1;
+      if (result[topLeft] && result[bottomRight] && !result[topRight] && !result[bottomLeft]) {
+        target = degree(topLeft) < degree(bottomRight) ? topLeft : bottomRight;
+      } else if (result[topRight] && result[bottomLeft] && !result[topLeft] && !result[bottomRight]) {
+        target = degree(topRight) < degree(bottomLeft) ? topRight : bottomLeft;
+      }
+      if (target >= 0) {
+        result[target] = 0;
+        removed.push(target);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return { mask: result, removed };
 }
 
 export function maskOverlapCount(masks: Uint8Array[]): number {

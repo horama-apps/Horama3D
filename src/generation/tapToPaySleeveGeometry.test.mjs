@@ -6,6 +6,7 @@ import {
   addEntryDetents,
   maskOverlapCount,
   normalizeDiagonalLabels,
+  removeDiagonalMaskContacts,
   rearRailMask,
   roundedRectangleMask,
 } from './tapToPaySleeveGeometry.ts';
@@ -18,6 +19,19 @@ test('creates a rounded sleeve face and an open-ended rear rail', () => {
   assert.equal(rail[4 * 12], 1);
   assert.equal(rail[4 * 12 + 11], 0);
   assert.equal(rail[5], 1);
+});
+
+test('removes edge-sharing diagonal contacts from an individual color mask', () => {
+  const cleaned = removeDiagonalMaskContacts(
+    Uint8Array.from([
+      1, 0,
+      0, 1,
+    ]),
+    2,
+    2,
+  );
+  assert.equal(cleaned.mask.reduce((sum, value) => sum + value, 0), 1);
+  assert.equal(cleaned.removed.length, 1);
 });
 
 test('adds a small mirrored single-sided entry detent without closing the card opening', () => {
@@ -46,4 +60,24 @@ test('normalizes diagonal-only color contacts without losing coverage', () => {
   assert.equal(maskOverlapCount(masks), 0);
   assert.equal(masks.reduce((sum, mask) => sum + mask.reduce((a, b) => a + b, 0), 0), 9);
   assert.notEqual(normalized[0], normalized[4]);
+});
+
+test('normalizes diagonal contacts at the rounded-mask boundary', () => {
+  const active = Uint8Array.from([
+    0, 1,
+    1, 1,
+  ]);
+  const normalized = normalizeDiagonalLabels(
+    Uint8Array.from([
+      0, 0,
+      0, 1,
+    ]),
+    active,
+    2,
+    2,
+  );
+  const masks = labelsToMasks(normalized, active, 2);
+  assert.equal(maskOverlapCount(masks), 0);
+  assert.equal(masks.reduce((sum, mask) => sum + mask.reduce((a, b) => a + b, 0), 0), 3);
+  assert.notEqual(normalized[1], normalized[2]);
 });
