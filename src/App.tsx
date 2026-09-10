@@ -135,6 +135,25 @@ function isLocalCreator(type: ProductType): boolean {
   );
 }
 
+function getPhoneCasePreviewSignature(params: ProductParams): string {
+  return JSON.stringify([
+    params.phone_case_model,
+    params.image_fit,
+    params.image_scale_percent,
+    params.image_offset_x_mm,
+    params.image_offset_y_mm,
+    params.image_rotation_deg,
+  ]);
+}
+
+function revokeLocalModelUrls(model: GeneratedModel) {
+  const urls = new Set<string>();
+  model.previewFiles?.forEach((file) => urls.add(file.url));
+  if (model.modelUrl?.startsWith('blob:')) urls.add(model.modelUrl);
+  if (model.downloadUrl?.startsWith('blob:')) urls.add(model.downloadUrl);
+  urls.forEach((url) => URL.revokeObjectURL(url));
+}
+
 export function App() {
   const { t, i18n } = useTranslation();
   const isDemoMode = useMemo(
@@ -198,6 +217,8 @@ export function App() {
   const downloadMenuRef = useRef<HTMLDivElement | null>(null);
   const toastIdRef = useRef(0);
   const toastTimeoutRefs = useRef<number[]>([]);
+  const phonePreviewRequestRef = useRef(0);
+  const lastPhonePreviewSignatureRef = useRef('');
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [signHolePositions, setSignHolePositions] = useState<
     Record<string, { u: number; v: number }>
@@ -205,6 +226,10 @@ export function App() {
   const [petHolePosition, setPetHolePosition] = useState({ u: 0.18, v: 0.72 });
 
   const params = paramsByType[productType];
+  const phoneCasePreviewSignature = useMemo(
+    () => getPhoneCasePreviewSignature(paramsByType.phone_case),
+    [paramsByType.phone_case],
+  );
   const visibleProducts = useMemo(
     () =>
       products.filter((item) =>
@@ -337,6 +362,7 @@ export function App() {
       if (uploadedUrlRef.current) URL.revokeObjectURL(uploadedUrlRef.current);
       localUrlRefs.current.forEach((url) => URL.revokeObjectURL(url));
       toastTimeoutRefs.current.forEach(window.clearTimeout);
+      phonePreviewRequestRef.current += 1;
     };
   }, []);
 
@@ -616,6 +642,9 @@ export function App() {
             ? await generateTextureModelLocally(uploadedFile as File, params)
           : await generateUrnModelLocally(uploadedFile as File, params);
       if (isImageProduct(productType)) setDownloadFormat('3mf');
+      if (productType === 'phone_case') {
+        lastPhonePreviewSignatureRef.current = getPhoneCasePreviewSignature(params);
+      }
       setActiveModel(generated);
       setIsModelValidated(generated.source !== 'empty');
       if (
@@ -643,6 +672,49 @@ export function App() {
       setIsGenerating(false);
     }
   };
+
+  useEffect(() => {
+    if (
+      productType !== 'phone_case' ||
+      !uploadedImageFile ||
+      model?.source !== 'local' ||
+      lastPhonePreviewSignatureRef.current === phoneCasePreviewSignature
+    ) {
+      return;
+    }
+
+    const request = phonePreviewRequestRef.current + 1;
+    phonePreviewRequestRef.current = request;
+    const previewParams = paramsByType.phone_case;
+    const timeoutId = window.setTimeout(async () => {
+      setIsGenerating(true);
+      setStatus(t('status.generatingPreview'));
+      try {
+        const generated = await generatePhoneCaseLocally(uploadedImageFile, previewParams);
+        if (phonePreviewRequestRef.current !== request) {
+          revokeLocalModelUrls(generated);
+          return;
+        }
+        lastPhonePreviewSignatureRef.current = phoneCasePreviewSignature;
+        setActiveModel(generated);
+        setIsModelValidated(true);
+        setStatus(t('status.generated'));
+      } catch (error) {
+        if (phonePreviewRequestRef.current === request) {
+          setStatus(error instanceof Error ? error.message : t('status.generationFailed'));
+        }
+      } finally {
+        if (phonePreviewRequestRef.current === request) setIsGenerating(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (phonePreviewRequestRef.current === request) {
+        phonePreviewRequestRef.current += 1;
+      }
+    };
+  }, [model?.source, phoneCasePreviewSignature, productType, uploadedImageFile]);
 
   const handleMountingHoleMove = useCallback(
     async (key: string, u: number, v: number) => {
@@ -935,6 +1007,7 @@ export function App() {
       return;
     }
     setUploadedImageFile(file);
+    lastPhonePreviewSignatureRef.current = '';
     setActiveModel({ source: 'empty', format: 'stl' });
     setIsModelValidated(true);
     setShouldCollapseSetup(false);

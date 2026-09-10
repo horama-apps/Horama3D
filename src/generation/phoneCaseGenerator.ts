@@ -15,8 +15,11 @@ interface PhoneCaseWorkerResponse {
 }
 
 const PHONE_CASE_ASSETS: Record<string, string> = {
-  iphone_17_pro_max: 'iphone-17-pro-max.stl',
+  iphone_17_pro_max_no_magsafe: 'iphone-17-pro-max-no-magsafe.stl',
+  iphone_17_pro_max_with_magsafe: 'iphone-17-pro-max-with-magsafe.stl',
 };
+
+const DEFAULT_PHONE_CASE_MODEL = 'iphone_17_pro_max_no_magsafe';
 
 let requestId = 0;
 
@@ -25,8 +28,8 @@ export async function generatePhoneCaseLocally(
   params: ProductParams,
 ): Promise<GeneratedModel> {
   const input = await file.arrayBuffer();
-  const modelKey = String(params.phone_case_model ?? 'iphone_17_pro_max');
-  const bodyName = PHONE_CASE_ASSETS[modelKey] ?? PHONE_CASE_ASSETS.iphone_17_pro_max;
+  const modelKey = String(params.phone_case_model ?? DEFAULT_PHONE_CASE_MODEL);
+  const bodyName = PHONE_CASE_ASSETS[modelKey] ?? PHONE_CASE_ASSETS[DEFAULT_PHONE_CASE_MODEL];
   const bodyResponse = await fetch(`${import.meta.env.BASE_URL}phone-case-assets/${bodyName}`);
   if (!bodyResponse.ok) throw new Error('No se pudo cargar el cuerpo incluido de la funda.');
   const bodyInput = await bodyResponse.arrayBuffer();

@@ -550,9 +550,10 @@ export const products: ProductDefinition[] = [
     accent: IMAGE_LAYERS_ACCENT_COLOR,
     params: [
       {
-        kind: 'select', key: 'phone_case_model', label: 'Phone model', defaultValue: 'iphone_17_pro_max',
+        kind: 'select', key: 'phone_case_model', label: 'Phone model', defaultValue: 'iphone_17_pro_max_no_magsafe',
         options: [
-          { label: 'iPhone 17 Pro Max', value: 'iphone_17_pro_max' },
+          { label: 'iPhone 17 Pro Max — No MagSafe', value: 'iphone_17_pro_max_no_magsafe' },
+          { label: 'iPhone 17 Pro Max — With MagSafe', value: 'iphone_17_pro_max_with_magsafe' },
         ],
       },
       { kind: 'number', key: 'color_count', label: 'Maximum material colors', min: 2, max: 8, step: 1, defaultValue: 4 },
