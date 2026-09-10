@@ -31,6 +31,7 @@ import { generateTextureModelLocally } from './generation/textureGenerator';
 import { analyzeStlLocally } from './generation/stlValidation';
 import { generateImageLayersLocally } from './generation/imageLayersGenerator';
 import { generateTapToPaySleeveLocally } from './generation/tapToPaySleeveGenerator';
+import { generatePhoneCaseLocally } from './generation/phoneCaseGenerator';
 import { generateBrandDecorationLocally } from './generation/brandDecorationGenerator';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
@@ -65,7 +66,7 @@ interface Toast {
 const wipProductTypes: ProductType[] = [];
 const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
   stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
-  image: ['image_layers', 'tap_to_pay_sleeve', 'brand_decoration'],
+  image: ['image_layers', 'tap_to_pay_sleeve', 'phone_case', 'brand_decoration'],
   create: [
     'signs',
     'business_signage',
@@ -116,7 +117,7 @@ function isWipProductType(type: ProductType): boolean {
 }
 
 function isImageProduct(type: ProductType): boolean {
-  return type === 'image_layers' || type === 'tap_to_pay_sleeve' || type === 'brand_decoration';
+  return type === 'image_layers' || type === 'tap_to_pay_sleeve' || type === 'phone_case' || type === 'brand_decoration';
 }
 
 function isLocalCreator(type: ProductType): boolean {
@@ -159,6 +160,7 @@ export function App() {
     keychains: getDefaultParams(getProduct('keychains')),
     image_layers: getDefaultParams(getProduct('image_layers')),
     tap_to_pay_sleeve: getDefaultParams(getProduct('tap_to_pay_sleeve')),
+    phone_case: getDefaultParams(getProduct('phone_case')),
     brand_decoration: getDefaultParams(getProduct('brand_decoration')),
     signs: getDefaultParams(getProduct('signs')),
     pet_keychains: getDefaultParams(getProduct('pet_keychains')),
@@ -571,6 +573,8 @@ export function App() {
           ? await generateImageLayersLocally(uploadedImageFile as File, params)
         : productType === 'tap_to_pay_sleeve'
           ? await generateTapToPaySleeveLocally(uploadedImageFile as File, params)
+        : productType === 'phone_case'
+          ? await generatePhoneCaseLocally(uploadedImageFile as File, params)
         : productType === 'brand_decoration'
           ? await generateBrandDecorationLocally(
               uploadedImageFile as File,

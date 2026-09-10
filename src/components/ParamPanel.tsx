@@ -64,7 +64,9 @@ export function ParamPanel({
       : undefined;
   const sleeveInfo = product.type === 'tap_to_pay_sleeve'
     ? modelMetadata?.tapToPaySleeve
-    : undefined;
+    : product.type === 'phone_case'
+      ? modelMetadata?.phoneCase
+      : undefined;
   const transformInfoRows = lampInfo
     ? getLampInfoRows(lampInfo, t)
     : urnInfo

@@ -40,6 +40,11 @@ export interface TapToPaySleeveWorkerParams {
   faceThicknessMm: number;
   colorThicknessMm: number;
   openingSide: 'left' | 'right';
+  templateKind?: 'card_sleeve' | 'phone_case';
+  imageScalePercent?: number;
+  imageOffsetXmm?: number;
+  imageOffsetYmm?: number;
+  imageRotationDeg?: number;
 }
 
 interface GeneratedPart {
@@ -81,7 +86,13 @@ if (typeof self !== 'undefined') self.onmessage = async (event: MessageEvent<Wor
 async function generateSleeve(request: WorkerRequest) {
   const { params } = request;
   let template: SleeveTemplate | undefined;
-  if (request.bodyInput) template = await prepareSleeveTemplate(request.bodyInput, params.colorThicknessMm);
+  if (request.bodyInput) {
+    template = await prepareSleeveTemplate(
+      request.bodyInput,
+      params.colorThicknessMm,
+      params.templateKind ?? 'card_sleeve',
+    );
+  }
   const cavityWidthMm = CARD_WIDTH_MM + params.cardClearanceMm;
   const cavityHeightMm = CARD_HEIGHT_MM + params.cardClearanceMm;
   const outerWidthMm = template?.outerWidthMm ?? cavityWidthMm + SIDE_WALL_MM;
@@ -91,11 +102,15 @@ async function generateSleeve(request: WorkerRequest) {
   const height = Math.max(2, Math.round(width * outerHeightMm / outerWidthMm));
   const pixelWidthMm = outerWidthMm / width;
   const pixelHeightMm = outerHeightMm / height;
-  const outerMask = roundedRectangleMask(
-    width,
-    height,
-    Math.round(CORNER_RADIUS_MM / Math.max(pixelWidthMm, pixelHeightMm)),
-  );
+  const outerMask = template?.surfaceTriangles
+    ? rasterizePrintableSurface(template.surfaceTriangles, width, height, pixelWidthMm, pixelHeightMm)
+    : roundedRectangleMask(
+        width,
+        height,
+        Math.round(CORNER_RADIUS_MM / Math.max(pixelWidthMm, pixelHeightMm)),
+      );
+  if (countMask(outerMask) === 0) throw new Error('No se encontró una cara exterior imprimible en el cuerpo seleccionado.');
+  if (template) template.surfaceMask = outerMask;
 
   const bitmap = await createImageBitmap(new Blob([request.input], { type: request.mimeType }));
   const originalWidth = bitmap.width;
@@ -105,7 +120,17 @@ async function generateSleeve(request: WorkerRequest) {
   if (!context) throw new Error('Este navegador no permite procesar la imagen localmente.');
   context.fillStyle = '#ffffff';
   context.fillRect(0, 0, width, height);
-  drawFittedImage(context, bitmap, width, height, params.fitMode);
+  drawFittedImage(
+    context,
+    bitmap,
+    width,
+    height,
+    params.fitMode,
+    params.imageScalePercent ?? 100,
+    (params.imageOffsetXmm ?? 0) / pixelWidthMm,
+    -(params.imageOffsetYmm ?? 0) / pixelHeightMm,
+    params.imageRotationDeg ?? 0,
+  );
   bitmap.close();
   const rgba = context.getImageData(0, 0, width, height).data;
 
@@ -117,6 +142,9 @@ export interface SleeveTemplate {
   outerWidthMm: number;
   outerHeightMm: number;
   totalThicknessMm: number;
+  kind?: 'card_sleeve' | 'phone_case';
+  surfaceTriangles?: Array<[[number, number], [number, number], [number, number]]>;
+  surfaceMask?: Uint8Array;
 }
 
 export function generateTapToPaySleeveFromPixels(
@@ -134,7 +162,7 @@ export function generateTapToPaySleeveFromPixels(
   const outerHeightMm = template?.outerHeightMm ?? cavityHeightMm + SIDE_WALL_MM * 2;
   const pixelWidthMm = outerWidthMm / width;
   const pixelHeightMm = outerHeightMm / height;
-  const outerMask = roundedRectangleMask(
+  const outerMask = template?.surfaceMask ?? roundedRectangleMask(
     width,
     height,
     Math.round(CORNER_RADIUS_MM / Math.max(pixelWidthMm, pixelHeightMm)),
@@ -267,8 +295,12 @@ export function generateTapToPaySleeveFromPixels(
       opening_side: params.openingSide,
     },
     warnings: [
-      'Imprime el portatarjeta con la cara multicolor contra la cama para obtener el frente liso.',
-      ...(template ? ['Se conservó completo el cuerpo STL; las regiones de color se exportan como modificadores superpuestos en el mismo assembly.'] : []),
+      template?.kind === 'phone_case'
+        ? 'Imprime la funda con la cara multicolor contra la cama; los huecos de cámara permanecen libres.'
+        : 'Imprime el portatarjeta con la cara multicolor contra la cama para obtener el frente liso.',
+      ...(template ? [template.kind === 'phone_case'
+        ? 'Se conservó el cuerpo completo de la funda; el diseño se recortó a la superficie exterior disponible.'
+        : 'Se conservó completo el cuerpo STL; las regiones de color se exportan como modificadores superpuestos en el mismo assembly.'] : []),
       `Asignación sugerida: ${specs.map((spec, index) => `Filamento ${index + 1} ${spec.colorHex}`).join(', ')}. Confirma estas ranuras en Bambu Studio antes de laminar.`,
       'Haz una prueba de ajuste: la holgura puede necesitar cambios según el material y la calibración de tu impresora.',
       ...(template ? [] : ['El pequeño retén junto a la entrada ayuda a evitar que la tarjeta se salga accidentalmente.']),
@@ -289,8 +321,13 @@ async function getModule(): Promise<ManifoldToplevel> {
   return modulePromise;
 }
 
-async function prepareSleeveTemplate(input: ArrayBuffer, faceDepthMm: number): Promise<SleeveTemplate> {
+async function prepareSleeveTemplate(
+  input: ArrayBuffer,
+  faceDepthMm: number,
+  kind: 'card_sleeve' | 'phone_case',
+): Promise<SleeveTemplate> {
   const wasm = await getModule();
+  const surfaceTriangles = kind === 'phone_case' ? extractPrintableFaceTriangles(input) : undefined;
   let body = stlToManifold(wasm, input);
   try {
     const initialBounds = body.boundingBox();
@@ -311,6 +348,8 @@ async function prepareSleeveTemplate(input: ArrayBuffer, faceDepthMm: number): P
       outerWidthMm,
       outerHeightMm,
       totalThicknessMm,
+      kind,
+      surfaceTriangles,
     };
   } finally {
     body.delete();
@@ -379,15 +418,88 @@ function drawFittedImage(
   width: number,
   height: number,
   fitMode: string,
+  scalePercent = 100,
+  offsetXPx = 0,
+  offsetYPx = 0,
+  rotationDeg = 0,
 ) {
   const scale = fitMode === 'contain'
     ? Math.min(width / bitmap.width, height / bitmap.height)
     : Math.max(width / bitmap.width, height / bitmap.height);
-  const drawWidth = bitmap.width * scale;
-  const drawHeight = bitmap.height * scale;
+  const placementScale = scale * Math.max(0.1, scalePercent / 100);
+  const drawWidth = bitmap.width * placementScale;
+  const drawHeight = bitmap.height * placementScale;
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = 'high';
-  context.drawImage(bitmap, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+  context.save();
+  context.translate(width / 2 + offsetXPx, height / 2 + offsetYPx);
+  context.rotate(rotationDeg * Math.PI / 180);
+  context.drawImage(bitmap, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+  context.restore();
+}
+
+function extractPrintableFaceTriangles(
+  input: ArrayBuffer,
+): Array<[[number, number], [number, number], [number, number]]> {
+  const geometry = new STLLoader().parse(input);
+  const position = geometry.getAttribute('position');
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let minZ = Number.POSITIVE_INFINITY;
+  for (let vertex = 0; vertex < position.count; vertex += 1) {
+    minX = Math.min(minX, position.getX(vertex));
+    minY = Math.min(minY, position.getY(vertex));
+    minZ = Math.min(minZ, position.getZ(vertex));
+  }
+  const triangles: Array<[[number, number], [number, number], [number, number]]> = [];
+  for (let offset = 0; offset < position.count; offset += 3) {
+    const points = [0, 1, 2].map((corner) => [
+      position.getX(offset + corner),
+      position.getY(offset + corner),
+      position.getZ(offset + corner),
+    ]);
+    const ab = points[1].map((value, axis) => value - points[0][axis]);
+    const ac = points[2].map((value, axis) => value - points[0][axis]);
+    const normalZ = ab[0] * ac[1] - ab[1] * ac[0];
+    const maxZ = Math.max(points[0][2], points[1][2], points[2][2]);
+    if (normalZ >= -1e-8 || maxZ > minZ + 0.05) continue;
+    triangles.push(points.map((point) => [point[0] - minX, point[1] - minY]) as [[number, number], [number, number], [number, number]]);
+  }
+  geometry.dispose();
+  return triangles;
+}
+
+function rasterizePrintableSurface(
+  triangles: Array<[[number, number], [number, number], [number, number]]>,
+  width: number,
+  height: number,
+  pixelWidthMm: number,
+  pixelHeightMm: number,
+): Uint8Array {
+  const canvas = new OffscreenCanvas(width, height);
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Este navegador no permite analizar la superficie de la funda.');
+  context.fillStyle = '#ffffff';
+  for (const triangle of triangles) {
+    context.beginPath();
+    triangle.forEach(([x, y], index) => {
+      const canvasX = x / pixelWidthMm;
+      const canvasY = height - y / pixelHeightMm;
+      if (index === 0) context.moveTo(canvasX, canvasY);
+      else context.lineTo(canvasX, canvasY);
+    });
+    context.closePath();
+    context.fill();
+  }
+  const alpha = context.getImageData(0, 0, width, height).data;
+  const raw = new Uint8Array(width * height);
+  for (let index = 0; index < raw.length; index += 1) raw[index] = alpha[index * 4 + 3] > 16 ? 1 : 0;
+  const inset = new Uint8Array(raw.length);
+  for (let row = 1; row < height - 1; row += 1) for (let column = 1; column < width - 1; column += 1) {
+    const index = row * width + column;
+    if (raw[index] && raw[index - 1] && raw[index + 1] && raw[index - width] && raw[index + width]) inset[index] = 1;
+  }
+  return inset;
 }
 
 function quantize(rgba: Uint8ClampedArray, active: Uint8Array, requestedCount: number) {

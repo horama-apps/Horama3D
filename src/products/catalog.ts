@@ -544,6 +544,48 @@ export const products: ProductDefinition[] = [
     ],
   },
   {
+    type: 'phone_case',
+    name: 'Phone Cases',
+    description: 'Apply a movable multicolor image to a phone-case body while preserving camera openings.',
+    accent: IMAGE_LAYERS_ACCENT_COLOR,
+    params: [
+      {
+        kind: 'select', key: 'phone_case_model', label: 'Phone model', defaultValue: 'iphone_17_pro_max',
+        options: [
+          { label: 'iPhone 17 Pro Max', value: 'iphone_17_pro_max' },
+        ],
+      },
+      { kind: 'number', key: 'color_count', label: 'Maximum material colors', min: 2, max: 8, step: 1, defaultValue: 4 },
+      {
+        kind: 'select', key: 'image_fit', label: 'Image fit', defaultValue: 'contain',
+        options: [
+          { label: 'Show the complete image', value: 'contain' },
+          { label: 'Fill the case', value: 'cover' },
+        ],
+      },
+      { kind: 'number', key: 'image_scale_percent', label: 'Image scale', unit: '%', min: 25, max: 200, step: 5, defaultValue: 100 },
+      { kind: 'number', key: 'image_offset_x_mm', label: 'Horizontal position', unit: 'mm', min: -60, max: 60, step: 1, defaultValue: 0 },
+      { kind: 'number', key: 'image_offset_y_mm', label: 'Vertical position', unit: 'mm', min: -100, max: 100, step: 1, defaultValue: 0 },
+      { kind: 'number', key: 'image_rotation_deg', label: 'Image rotation', unit: '°', min: -180, max: 180, step: 5, defaultValue: 0 },
+      { kind: 'number', key: 'color_thickness_mm', label: 'Multicolor face thickness', unit: 'mm', min: 0.2, max: 0.6, step: 0.1, defaultValue: 0.4 },
+      {
+        kind: 'select', key: 'detail_preset', label: 'Detail', defaultValue: 'high',
+        options: [
+          { label: 'Draft', value: 'draft' },
+          { label: 'Balanced', value: 'balanced' },
+          { label: 'High', value: 'high' },
+        ],
+      },
+      {
+        kind: 'select', key: 'background_strategy', label: 'Case color', defaultValue: 'border',
+        options: [
+          { label: 'Detect from border', value: 'border' },
+          { label: 'Dominant color', value: 'dominant' },
+        ],
+      },
+    ],
+  },
+  {
     type: 'brand_decoration',
     name: 'Decoración de marca',
     description: 'Convierte un logotipo o una imagen en una silueta imprimible, una pieza de arte lineal o un relieve simplificado.',

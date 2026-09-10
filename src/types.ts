@@ -7,6 +7,7 @@ export type ProductType =
   | 'keychains'
   | 'image_layers'
   | 'tap_to_pay_sleeve'
+  | 'phone_case'
   | 'brand_decoration'
   | 'signs'
   | 'pet_keychains'
@@ -108,6 +109,7 @@ export interface GeneratedModel {
     headKeychain?: HeadKeychainTransformInfo;
     imageLayers?: ImageLayersTransformInfo;
     tapToPaySleeve?: TapToPaySleeveTransformInfo;
+    phoneCase?: PhoneCaseTransformInfo;
     mountingHoles?: Array<{
       key: string;
       x: number;
@@ -199,4 +201,17 @@ export interface TapToPaySleeveTransformInfo {
   color_count?: number;
   colors?: string[];
   opening_side?: 'left' | 'right';
+}
+
+export interface PhoneCaseTransformInfo {
+  original_width_px?: number;
+  original_height_px?: number;
+  processed_width_px?: number;
+  processed_height_px?: number;
+  outer_width_mm?: number;
+  outer_height_mm?: number;
+  total_thickness_mm?: number;
+  color_thickness_mm?: number;
+  color_count?: number;
+  colors?: string[];
 }

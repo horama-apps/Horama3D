@@ -141,7 +141,7 @@ async function export3mf(
       const bytes = await fetchBytes(part.url);
       const roleResult = getPartRole(productType, part);
       const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-      const mesh = productType === 'tap_to_pay_sleeve' && roleResult.role === 'body'
+      const mesh = (productType === 'tap_to_pay_sleeve' || productType === 'phone_case') && roleResult.role === 'body'
         ? await stlToManifoldMeshData(buffer)
         : geometryToMeshData(loader.parse(buffer));
       return {
@@ -161,8 +161,9 @@ async function export3mf(
     productType,
     params,
   );
-  if (productType === 'image_layers') validateMulticolorMeshes(meshes, 4);
-  if (productType === 'tap_to_pay_sleeve') validateMulticolorMeshes(meshes, 8);
+  if (productType === 'image_layers') validateMulticolorMeshes(meshes, 4, 3);
+  if (productType === 'tap_to_pay_sleeve') validateMulticolorMeshes(meshes, 8, 2);
+  if (productType === 'phone_case') validateMulticolorMeshes(meshes, 8, 2);
 
   const title = getBaseName(getDefaultExportName(model, productType, '3mf'));
   const bambuProject = buildBambu3mfProject(meshes, title);
@@ -199,9 +200,9 @@ async function export3mf(
   };
 }
 
-function validateMulticolorMeshes(meshes: AssignedMesh[], maximumColors: number): void {
-  if (meshes.length < 3) {
-    throw new Error('The multicolor 3MF needs a backing and at least two color parts.');
+function validateMulticolorMeshes(meshes: AssignedMesh[], maximumColors: number, minimumParts: number): void {
+  if (meshes.length < minimumParts) {
+    throw new Error('The multicolor 3MF does not contain enough printable color parts.');
   }
   const materials = getUniqueMaterials(meshes);
   if (materials.length < 2 || materials.length > maximumColors) {
