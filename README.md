@@ -1,4 +1,4 @@
-# Horama3D Configurator
+# Horama3D Configurator app
 
 Web configurator for loading STL files, applying product-specific transformations, previewing the result in 3D, and exporting printable models.
 
