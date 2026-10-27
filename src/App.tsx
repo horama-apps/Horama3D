@@ -20,6 +20,7 @@ import { generatePetKeychainModel } from './generation/petKeychainGenerator';
 import { generateBraceletGemsModel } from './generation/braceletGenerator';
 import { generateTipJarModel } from './generation/tipJarGenerator';
 import { generateWifiSignModel } from './generation/wifiSignGenerator';
+import { generateChristmasTreeOrnamentModel } from './generation/christmasTreeOrnamentGenerator';
 import {
   generateBusinessKeychainModel,
   generateBusinessPackageModel,
@@ -68,6 +69,7 @@ const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
   stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
   image: ['image_layers', 'tap_to_pay_sleeve', 'phone_case', 'brand_decoration'],
   create: [
+    'christmas_tree_ornament',
     'signs',
     'business_signage',
     'qr_sign',
@@ -83,7 +85,7 @@ const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
   stl: 'lamp',
   image: 'image_layers',
-  create: 'signs',
+  create: 'christmas_tree_ornament',
 };
 const configureStatusByProduct: Partial<Record<ProductType, string>> = {
   signs: 'status.configureSign',
@@ -99,6 +101,7 @@ const configureStatusByProduct: Partial<Record<ProductType, string>> = {
   brand_decoration: 'status.configureBrandDecoration',
 };
 const generatingStatusByProduct: Partial<Record<ProductType, string>> = {
+  christmas_tree_ornament: 'status.generatingPreview',
   signs: 'status.generatingSign',
   pet_keychains: 'status.generatingPetKeychain',
   bracelet_gems: 'status.generatingBracelet',
@@ -122,6 +125,7 @@ function isImageProduct(type: ProductType): boolean {
 
 function isLocalCreator(type: ProductType): boolean {
   return (
+    type === 'christmas_tree_ornament' ||
     type === 'signs' ||
     type === 'pet_keychains' ||
     type === 'bracelet_gems' ||
@@ -165,12 +169,13 @@ export function App() {
   const [workspaceView, setWorkspaceView] =
     useState<WorkspaceView>(isDemoMode ? 'create' : 'stl');
   const [productType, setProductType] = useState<ProductType>(
-    isDemoMode ? 'signs' : 'lamp',
+    isDemoMode ? 'christmas_tree_ornament' : 'lamp',
   );
   const product = useMemo(() => getProduct(productType), [productType]);
   const [paramsByType, setParamsByType] = useState<
     Record<ProductType, ProductParams>
   >({
+    christmas_tree_ornament: getDefaultParams(getProduct('christmas_tree_ornament')),
     lamp: getDefaultParams(getProduct('lamp')),
     urn: getDefaultParams(getProduct('urn')),
     clicker: getDefaultParams(getProduct('clicker')),
@@ -535,7 +540,11 @@ export function App() {
     } else if (configuratorMode === 'stl') {
       setStatus(t('status.loadStl'));
     } else if (configuratorMode === 'create') {
-      setStatus(t(configureStatusByProduct[productType] ?? 'status.configureSign'));
+      setStatus(
+        productType === 'christmas_tree_ornament'
+          ? t('products.christmas_tree_ornament.description')
+          : t(configureStatusByProduct[productType] ?? 'status.configureSign'),
+      );
     } else {
       setStatus(uploadedImageFile ? t('status.imageReady') : t('status.loadImage'));
     }
@@ -595,7 +604,9 @@ export function App() {
     );
     try {
       const generated =
-        productType === 'image_layers'
+        productType === 'christmas_tree_ornament'
+          ? await generateChristmasTreeOrnamentModel(params)
+        : productType === 'image_layers'
           ? await generateImageLayersLocally(uploadedImageFile as File, params)
         : productType === 'tap_to_pay_sleeve'
           ? await generateTapToPaySleeveLocally(uploadedImageFile as File, params)
@@ -793,7 +804,11 @@ export function App() {
 
     if (isLocalCreator(nextType) || isWipProductType(nextType)) {
       setActiveModel({ source: 'empty', format: 'stl' });
-      setStatus(t(configureStatusByProduct[nextType] ?? 'status.moduleWip'));
+      setStatus(
+        nextType === 'christmas_tree_ornament'
+          ? t('products.christmas_tree_ornament.description')
+          : t(configureStatusByProduct[nextType] ?? 'status.moduleWip'),
+      );
       return;
     }
 

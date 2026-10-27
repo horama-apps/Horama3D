@@ -730,7 +730,8 @@ function buildBambu3mfProject(meshes: AssignedMesh[], title: string) {
   const prepared = prepareBambuMeshes(meshes, materials);
   const assemblyMin = getAssemblyMin(meshes, getAssemblyCenter(meshes));
   // Leave room for a four-color wipe tower on the 180 x 180 mm A1 mini bed.
-  const buildTranslation = new THREE.Vector3(94, 65, -assemblyMin.z);
+  // The tower occupies the left side of the plate, so keep the sleeve farther right.
+  const buildTranslation = new THREE.Vector3(106, 65, -assemblyMin.z);
 
   return {
     mainModelXml: buildBambuMainModelXml(prepared, buildTranslation, title),

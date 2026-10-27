@@ -17,7 +17,8 @@ export type ProductType =
   | 'qr_sign'
   | 'business_signage'
   | 'display_accessories'
-  | 'business_packages';
+  | 'business_packages'
+  | 'christmas_tree_ornament';
 
 export type ParamKind = 'number' | 'boolean' | 'select' | 'text' | 'color';
 

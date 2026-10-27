@@ -18,6 +18,7 @@ const resources = {
         wip: 'WIP', workInProgress: 'trabajo en progreso', objects: 'Objetos',
       },
       products: {
+        christmas_tree_ornament: { name: 'Adorno de árbol navideño', description: 'Árbol personalizado multicolor con marco verde, adornos y ojal para colgar.' },
         lamp: { name: 'Lámparas', description: 'Convierte modelos STL en lámparas con el mecanismo fijo de Horama.' },
         urn: { name: 'Urnas', description: 'Ajustes de transformación para el flujo de urnas STL.' },
         clicker: { name: 'Clickers', description: 'Cuerpo, tapa, espacio del interruptor y opciones de llavero.' },
@@ -39,6 +40,7 @@ const resources = {
         business_packages: { name: 'Paquetes para negocios', description: 'Genera el Kit QR o los paquetes Esencial, Presencia y Experiencia.' },
       },
       params: {
+        family_text: { label: 'Texto de familia' }, name_text: { label: 'Nombre' }, ornament_width_mm: { label: 'Ancho del adorno' }, frame_color: { label: 'Color del marco y adornos' }, hanging_hole_diameter_mm: { label: 'Diámetro del ojal' },
         size: { label: 'Tamaño' }, lid_text: { label: 'Texto de la tapa' },
         body_color: { label: 'Color del cuerpo' }, base_color: { label: 'Color de la base' }, lid_color: { label: 'Color de la tapa' }, text_color: { label: 'Color del texto' },
         base_thickness_mm: { label: 'Grosor de la base' }, inner_scale: { label: 'Escala interior' }, planar_cut_base_mm: { label: 'Corte de base' },
@@ -123,6 +125,7 @@ const resources = {
       configurator: { label: 'Configurator type', stl: 'STL', image: 'IMG to STL', create: 'Create from Scratch' },
       common: { generate: 'Generate', reset: 'Reset', download: 'Download', show: 'Show', hide: 'Hide', setup: 'Setup', finishing: 'Finishing and textures', customization: 'Customization', transformInfo: 'Transform info', generalInfo: 'General information', wip: 'WIP', workInProgress: 'work in progress', objects: 'Objects' },
       products: {
+        christmas_tree_ornament: { name: 'Christmas Tree Ornament', description: 'Personalized multicolor tree with a green frame, decorations, and hanging eyelet.' },
         lamp: { name: 'Lamps', description: 'Turn STL models into lamps with the fixed Horama mechanism.' },
         urn: { name: 'Urns', description: 'Urn transform settings from the STL workflow.' },
         clicker: { name: 'Clickers', description: 'Button body, cap size, switch clearance, and keychain options.' },
@@ -144,6 +147,7 @@ const resources = {
         business_packages: { name: 'Business Packages', description: 'Generate the QR Kit or the Essential, Presence, and Experience packages.' },
       },
       params: {
+        family_text: { label: 'Family text' }, name_text: { label: 'Name' }, ornament_width_mm: { label: 'Ornament width' }, frame_color: { label: 'Frame and decoration color' }, hanging_hole_diameter_mm: { label: 'Eyelet diameter' },
         size: { label: 'Size' }, lid_text: { label: 'Lid text' }, body_color: { label: 'Body color' }, base_color: { label: 'Base color' }, lid_color: { label: 'Lid color' }, text_color: { label: 'Text color' },
         base_thickness_mm: { label: 'Base thickness' }, inner_scale: { label: 'Inner scale' }, planar_cut_base_mm: { label: 'Base cut' }, connector_margin_mm: { label: 'Connector margin' }, auto_scale_to_fit: { label: 'Auto-scale to minimum fit', help: 'Uniformly enlarges the STL only as much as needed to fit the fixed lamp mechanism.' }, preserve_open_mesh: { label: 'Preserve open meshes', help: 'For a non-watertight STL, keep the body intact and only adapt its base for the removable lid.' }, fit_clearance_mm: { label: 'Fit clearance', help: 'Increase this value if the printed base fits too tightly.' }, part_gap_mm: { label: 'Part gap' }, stl_scale_percent: { label: 'STL scale', dimensions: 'Resulting size: {{dimensions}}', smallWarning: 'Model is smaller than 20 mm' }, cut_height_mm: { label: 'Cut height' }, base_protrusion_mm: { label: 'Base protrusion' },
         head_keychain_attachment: { label: 'Attachment type' }, ring_outer_diameter_mm: { label: 'Ring outer diameter' }, ring_offset_x_mm: { label: 'Move ring on X' }, ring_offset_y_mm: { label: 'Move ring on Y' }, head_hole_diameter_mm: { label: 'Hole diameter' }, head_hole_offset_x_mm: { label: 'Move hole on X' }, head_hole_offset_z_mm: { label: 'Move hole vertically' },
@@ -175,6 +179,7 @@ const resources = {
       configurator: { label: 'Type de configurateur', stl: 'STL', image: 'IMG vers STL', create: 'Créer de zéro' },
       common: { generate: 'Générer', reset: 'Réinitialiser', download: 'Télécharger', show: 'Afficher', hide: 'Masquer', setup: 'Configuration', finishing: 'Finition et textures', customization: 'Personnalisation', transformInfo: 'Informations de transformation', generalInfo: 'Informations générales', wip: 'WIP', workInProgress: 'travail en cours', objects: 'Objets' },
       products: {
+        christmas_tree_ornament: { name: 'Décoration de sapin', description: 'Sapin multicolore personnalisé avec cadre vert, ornements et œillet.' },
         lamp: { name: 'Lampes', description: 'Transforme les modèles STL en lampes avec le mécanisme Horama fixe.' },
         urn: { name: 'Urnes', description: 'Réglages de transformation des urnes pour le flux STL.' },
         clicker: { name: 'Clickers', description: 'Corps, capuchon, dégagement de l’interrupteur et options de porte-clés.' },
@@ -196,6 +201,7 @@ const resources = {
         business_packages: { name: 'Forfaits professionnels', description: 'Générez le Kit QR ou les forfaits Essentiel, Présence et Expérience.' },
       },
       params: {
+        family_text: { label: 'Texte de famille' }, name_text: { label: 'Prénom' }, ornament_width_mm: { label: 'Largeur de la décoration' }, frame_color: { label: 'Couleur du cadre et des ornements' }, hanging_hole_diameter_mm: { label: 'Diamètre de l’œillet' },
         size: { label: 'Taille' }, lid_text: { label: 'Texte du couvercle' }, body_color: { label: 'Couleur du corps' }, base_color: { label: 'Couleur de la base' }, lid_color: { label: 'Couleur du couvercle' }, text_color: { label: 'Couleur du texte' },
         base_thickness_mm: { label: 'Épaisseur de la base' }, inner_scale: { label: 'Échelle intérieure' }, planar_cut_base_mm: { label: 'Coupe de la base' }, connector_margin_mm: { label: 'Marge du connecteur' }, auto_scale_to_fit: { label: 'Mise à l’échelle automatique minimale', help: 'Agrandit uniformément le STL juste assez pour accueillir le mécanisme fixe de la lampe.' }, preserve_open_mesh: { label: 'Conserver les maillages ouverts', help: 'Si le STL n’est pas étanche, conserve le corps et adapte uniquement sa base au couvercle amovible.' }, fit_clearance_mm: { label: 'Jeu d’assemblage', help: 'Augmentez cette valeur si la base imprimée est trop serrée.' }, part_gap_mm: { label: 'Écart entre les pièces' }, stl_scale_percent: { label: 'Échelle du STL', dimensions: 'Dimensions résultantes : {{dimensions}}', smallWarning: 'Modèle inférieur à 20 mm' }, cut_height_mm: { label: 'Hauteur de coupe' }, base_protrusion_mm: { label: 'Saillie de la base' },
         head_keychain_attachment: { label: 'Type de fixation' }, ring_outer_diameter_mm: { label: 'Diamètre extérieur de l’anneau' }, ring_offset_x_mm: { label: 'Déplacer l’anneau sur X' }, ring_offset_y_mm: { label: 'Déplacer l’anneau sur Y' }, head_hole_diameter_mm: { label: 'Diamètre du trou' }, head_hole_offset_x_mm: { label: 'Déplacer le trou sur X' }, head_hole_offset_z_mm: { label: 'Déplacer le trou verticalement' },

@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { generateTapToPaySleeveFromPixels } from './tapToPaySleeve.worker.ts';
+import { generateTapToPaySleeveFromPixels, maskToBinaryStl } from './tapToPaySleeve.worker.ts';
+
+test('preserves the full area of disconnected color regions', () => {
+  const width = 32;
+  const height = 20;
+  const mask = new Uint8Array(width * height);
+  for (let row = 1; row < 8; row += 1) for (let column = 1; column < 13; column += 1) mask[row * width + column] = 1;
+  for (let row = 3; row < 16; row += 1) for (let column = 19; column < 30; column += 1) mask[row * width + column] = 1;
+  for (let row = 10; row < 18; row += 1) for (let column = 5; column < 10; column += 1) mask[row * width + column] = 1;
+
+  const thickness = 0.4;
+  const buffer = maskToBinaryStl(mask, width, height, 0.2, 0.2, 0, thickness);
+  const expectedVolume = [...mask].reduce((sum, value) => sum + value, 0) * 0.2 * 0.2 * thickness;
+  assert.ok(Math.abs(binaryStlVolume(buffer) - expectedVolume) < 1e-4);
+});
 
 test('generates one manifold card body plus four printable color parts', () => {
   const width = 160;
@@ -73,4 +87,22 @@ function countInvalidStlEdges(buffer) {
     }
   }
   return [...edges.values()].filter(({ count, orientation }) => count !== 2 || orientation !== 0).length;
+}
+
+function binaryStlVolume(buffer) {
+  const view = new DataView(buffer);
+  let signedVolume = 0;
+  for (let triangle = 0; triangle < view.getUint32(80, true); triangle += 1) {
+    const base = 84 + triangle * 50 + 12;
+    const point = (offset) => [0, 4, 8].map((delta) => view.getFloat32(offset + delta, true));
+    const a = point(base);
+    const b = point(base + 12);
+    const c = point(base + 24);
+    signedVolume += (
+      a[0] * (b[1] * c[2] - b[2] * c[1])
+      - a[1] * (b[0] * c[2] - b[2] * c[0])
+      + a[2] * (b[0] * c[1] - b[1] * c[0])
+    ) / 6;
+  }
+  return Math.abs(signedVolume);
 }

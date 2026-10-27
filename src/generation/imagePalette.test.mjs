@@ -38,6 +38,16 @@ test('does not turn a saturated red accent into black line art', () => {
   assert.deepEqual([...labels], [2, 1, 1]);
 });
 
+test('does not turn a dark saturated purple accent into black line art', () => {
+  const palette = [[24, 20, 25], [112, 58, 148], [245, 117, 21], [248, 236, 210]];
+  const rgba = new Uint8ClampedArray([
+    112, 58, 148, 255,
+    24, 20, 25, 255,
+  ]);
+  const labels = reinforceDarkLineArt(Uint8Array.from([1, 0]), rgba, new Uint8Array(2).fill(1), palette);
+  assert.deepEqual([...labels], [1, 0]);
+});
+
 test('restores black assignments after an antialias palette was collapsed', () => {
   const rgba = new Uint8ClampedArray([
     254, 212, 32, 255,

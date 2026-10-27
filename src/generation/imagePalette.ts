@@ -92,10 +92,10 @@ export function reinforceDarkLineArt(
     const source: RgbColor = [rgba[offset], rgba[offset + 1], rgba[offset + 2]];
     const sourceLuminance = luminance(source);
     const sourceChroma = Math.max(...source) - Math.min(...source);
-    // Always retain genuinely dark pixels, while only treating mid-dark pixels as
-    // line antialiasing when they are reasonably neutral. Saturated accents such
-    // as red bows must remain eligible for their own filament instead of becoming black.
-    if (sourceLuminance <= 85 || (sourceLuminance <= maximumSourceLuminance && sourceChroma <= 64)) {
+    // Always retain only near-black pixels. Darker midtones are line antialiasing
+    // only when reasonably neutral, so saturated accents such as purple remain
+    // eligible for their own filament instead of becoming black.
+    if (sourceLuminance <= 32 || (sourceLuminance <= maximumSourceLuminance && sourceChroma <= 64)) {
       result[index] = darkest;
     }
   }

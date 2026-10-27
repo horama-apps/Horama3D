@@ -661,9 +661,35 @@ export function maskToBinaryStl(
   z1: number,
 ): ArrayBuffer {
   const vectorized = maskToVectorBinaryStl(mask, width, height, pixelWidth, pixelHeight, z0, z1);
+  const expectedVolume = countMask(mask) * pixelWidth * pixelHeight * Math.abs(z1 - z0);
+  const vectorizedVolume = binaryStlVolume(vectorized);
+  const volumeTolerance = Math.max(expectedVolume * 0.001, pixelWidth * pixelHeight * Math.abs(z1 - z0));
   return hasInvalidBinaryStlEdges(vectorized)
+    || Math.abs(vectorizedVolume - expectedVolume) > volumeTolerance
     ? maskToGridBinaryStl(mask, width, height, pixelWidth, pixelHeight, z0, z1)
     : vectorized;
+}
+
+function binaryStlVolume(buffer: ArrayBuffer): number {
+  const view = new DataView(buffer);
+  let signedVolume = 0;
+  for (let triangle = 0; triangle < view.getUint32(80, true); triangle += 1) {
+    const base = 84 + triangle * 50 + 12;
+    const point = (offset: number) => [
+      view.getFloat32(offset, true),
+      view.getFloat32(offset + 4, true),
+      view.getFloat32(offset + 8, true),
+    ];
+    const a = point(base);
+    const b = point(base + 12);
+    const c = point(base + 24);
+    signedVolume += (
+      a[0] * (b[1] * c[2] - b[2] * c[1])
+      - a[1] * (b[0] * c[2] - b[2] * c[0])
+      + a[2] * (b[0] * c[1] - b[1] * c[0])
+    ) / 6;
+  }
+  return Math.abs(signedVolume);
 }
 
 function maskToGridBinaryStl(
