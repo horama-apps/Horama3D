@@ -729,6 +729,39 @@ export function App() {
 
   const handleMountingHoleMove = useCallback(
     async (key: string, u: number, v: number) => {
+      if (productType === 'christmas_tree_ornament') {
+        const currentPositions = parseNormalizedPositionMap(params.ornament_positions);
+        const nextPositions = {
+          ...currentPositions,
+          [key]: { u, v },
+        };
+        const nextParams = {
+          ...params,
+          ornament_positions: JSON.stringify(nextPositions),
+        };
+        setParamsByType((current) => ({
+          ...current,
+          christmas_tree_ornament: nextParams,
+        }));
+        setIsGenerating(true);
+        setStatus(t('status.generatingPreview'));
+        try {
+          const generated = await generateChristmasTreeOrnamentModel(nextParams);
+          generated.metadata = {
+            ...generated.metadata,
+            preserveCamera: true,
+          };
+          setActiveModel(generated);
+          setStatus(t('status.generated'));
+        } catch (error) {
+          setStatus(
+            error instanceof Error ? error.message : t('status.generationFailed'),
+          );
+        } finally {
+          setIsGenerating(false);
+        }
+        return;
+      }
       if (productType === 'pet_keychains') {
         const nextPosition = { u, v };
         setPetHolePosition(nextPosition);
@@ -1497,6 +1530,29 @@ function LanguageMenu() {
 
 function roundToTenth(value: number): number {
   return Math.max(0, Math.round(value * 10) / 10);
+}
+
+function parseNormalizedPositionMap(
+  value: ProductParams[string] | undefined,
+): Record<string, { u: number; v: number }> {
+  if (typeof value !== 'string' || !value) return {};
+  try {
+    const parsed = JSON.parse(value) as Record<string, { u?: unknown; v?: unknown }>;
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([key, position]) => {
+        const u = Number(position?.u);
+        const v = Number(position?.v);
+        return Number.isFinite(u) && Number.isFinite(v)
+          ? [[key, {
+              u: Math.min(1, Math.max(0, u)),
+              v: Math.min(1, Math.max(0, v)),
+            }]]
+          : [];
+      }),
+    );
+  } catch {
+    return {};
+  }
 }
 
 function roundDownToHalf(value: number): number {

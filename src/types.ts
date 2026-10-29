@@ -103,6 +103,7 @@ export interface GeneratedModel {
   blob?: Blob;
   format: 'stl' | '3mf' | 'glb';
   metadata?: {
+    preserveCamera?: boolean;
     objects?: string[];
     lamp?: LampTransformInfo;
     urn?: UrnTransformInfo;
@@ -113,6 +114,7 @@ export interface GeneratedModel {
     phoneCase?: PhoneCaseTransformInfo;
     mountingHoles?: Array<{
       key: string;
+      kind?: 'hole' | 'decoration';
       x: number;
       y: number;
       radius: number;

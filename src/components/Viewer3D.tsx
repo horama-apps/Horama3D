@@ -436,17 +436,20 @@ export function Viewer3D({
     if (!context) return;
     clearGroup(context.mountingHolePreviewRoot);
     const isPetKeychain = productType === 'pet_keychains';
+    const isChristmasDecoration = productType === 'christmas_tree_ornament';
     if (
-      (!isMountingSideView && !isPetKeychain) ||
+      (!isMountingSideView && !isPetKeychain && !isChristmasDecoration) ||
       !model?.metadata?.mountingHoles
     ) return;
 
     model.metadata.mountingHoles.forEach((hole) => {
+      const isDecoration = hole.kind === 'decoration';
+      const markerColor = isDecoration ? 0x2f8f83 : 0xd94c43;
       const marker = new THREE.Mesh(
-        new THREE.CircleGeometry(hole.radius * 1.42, 36),
+        new THREE.CircleGeometry(hole.radius * (isDecoration ? 1.15 : 1.42), 36),
         new THREE.MeshBasicMaterial({
-          color: 0xd94c43,
-          opacity: 0.2,
+          color: markerColor,
+          opacity: isDecoration ? 0.12 : 0.2,
           transparent: true,
           depthTest: false,
           side: THREE.DoubleSide,
@@ -455,7 +458,7 @@ export function Viewer3D({
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(hole.radius * 0.72, hole.radius * 1.08, 36),
         new THREE.MeshBasicMaterial({
-          color: 0xd94c43,
+          color: markerColor,
           opacity: 0.95,
           transparent: true,
           depthTest: false,
@@ -468,7 +471,7 @@ export function Viewer3D({
       marker.position.set(
         hole.x + context.modelRoot.position.x,
         hole.y + context.modelRoot.position.y,
-        isPetKeychain
+        isPetKeychain || isChristmasDecoration
           ? context.modelRoot.position.z + (liveBounds?.height ?? 0) + 0.08
           : context.modelRoot.position.z - 0.08,
       );
@@ -483,13 +486,21 @@ export function Viewer3D({
     const context = sceneRef.current;
     if (!context) return;
 
+    const preserveCamera = Boolean(
+      model?.metadata?.preserveCamera &&
+      context.modelRoot.children.length > 0 &&
+      liveBounds,
+    );
+
     clearGroup(context.modelRoot);
     clearGroup(context.keychainHoleRoot);
-    setLiveBounds(null);
-    onModelBoundsChange?.(null);
-    onModelObjectBoundsChange?.([]);
-    context.resizeGrid(null);
-    context.modelRoot.position.set(0, 0, 0);
+    if (!preserveCamera) {
+      setLiveBounds(null);
+      onModelBoundsChange?.(null);
+      onModelObjectBoundsChange?.([]);
+      context.resizeGrid(null);
+      context.modelRoot.position.set(0, 0, 0);
+    }
 
     if (!model || model.source === 'empty') {
       return;
@@ -531,7 +542,8 @@ export function Viewer3D({
           );
           loadedCount += 1;
           if (loadedCount === expectedCount) {
-            const bounds = context.frameModel();
+            const bounds = preserveCamera ? liveBounds : context.frameModel();
+            if (preserveCamera) context.resizeGrid(bounds);
             setLiveBounds(bounds);
             onModelBoundsChange?.(bounds);
             onModelObjectBoundsChange?.(objectBounds);

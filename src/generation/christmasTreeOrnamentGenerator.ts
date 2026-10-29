@@ -18,6 +18,32 @@ const SOURCE_FACE_Z = 2.7599985599517822;
 const SOURCE_RIM_Z = 4.731426239013672;
 const TREE_CENTER_X = SOURCE_WIDTH / 2;
 
+type DecorationSpec = {
+  key: string;
+  color: 'green' | 'red';
+  shape: 'disc' | 'star';
+  x: number;
+  y: number;
+  radius: number;
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
+};
+
+type DecorationPosition = DecorationSpec & { currentX: number; currentY: number };
+
+const DECORATIONS: DecorationSpec[] = [
+  { key: 'green-upper-left', color: 'green', shape: 'disc', x: 27.5, y: 78, radius: 1.75, bounds: { minX: 22, maxX: 35, minY: 71, maxY: 82 } },
+  { key: 'green-upper-right', color: 'green', shape: 'disc', x: 53.5, y: 75, radius: 2.05, bounds: { minX: 47, maxX: 61, minY: 68, maxY: 80 } },
+  { key: 'green-upper-center', color: 'green', shape: 'disc', x: 40.5, y: 68.5, radius: 1.25, bounds: { minX: 35, maxX: 46, minY: 66, maxY: 76 } },
+  { key: 'green-lower-left', color: 'green', shape: 'disc', x: 18, y: 28.5, radius: 1.45, bounds: { minX: 12, maxX: 29, minY: 24, maxY: 33 } },
+  { key: 'green-lower-star', color: 'green', shape: 'star', x: 65.5, y: 16.5, radius: 3.1, bounds: { minX: 57, maxX: 69, minY: 13, maxY: 24 } },
+  { key: 'red-top-star', color: 'red', shape: 'star', x: TREE_CENTER_X, y: 88, radius: 3.4, bounds: { minX: 34, maxX: 47, minY: 83, maxY: 92 } },
+  { key: 'red-lower-star', color: 'red', shape: 'star', x: 14.5, y: 16.5, radius: 3, bounds: { minX: 11, maxX: 24, minY: 13, maxY: 24 } },
+  { key: 'red-middle-left', color: 'red', shape: 'disc', x: 17, y: 47, radius: 1.35, bounds: { minX: 13, maxX: 25, minY: 43, maxY: 52 } },
+  { key: 'red-middle-right', color: 'red', shape: 'disc', x: 65, y: 46, radius: 1.5, bounds: { minX: 56, maxX: 68, minY: 42, maxY: 52 } },
+  { key: 'red-separator', color: 'red', shape: 'disc', x: TREE_CENTER_X, y: 34.5, radius: 1.45, bounds: { minX: 35, maxX: 46, minY: 32, maxY: 39 } },
+  { key: 'red-lower-right', color: 'red', shape: 'disc', x: 64, y: 29, radius: 1.45, bounds: { minX: 55, maxX: 69, minY: 25, maxY: 33 } },
+];
+
 export async function generateChristmasTreeOrnamentModel(
   params: ProductParams,
 ): Promise<GeneratedModel> {
@@ -29,17 +55,29 @@ export async function generateChristmasTreeOrnamentModel(
   const width = clampNumber(params.ornament_width_mm, 81, 65, 150);
   const scale = width / SOURCE_WIDTH;
   const relief = clampNumber(params.relief_height_mm, 1.2, 0.6, 2.4);
+  const familyTextScale = clampNumber(params.family_text_scale_percent, 90, 50, 100) / 100;
+  const nameTextScale = clampNumber(params.name_text_scale_percent, 100, 50, 100) / 100;
   const font = await loadFont(stringParam(params.font, 'kaushan_script_regular'));
   const baseColor = stringParam(params.base_color, '#d9ae78');
   const greenColor = stringParam(params.frame_color, '#3f7d45');
   const redColor = stringParam(params.text_color, '#d72d22');
 
   const source = await loadTreeGeometry();
+  const decorations = resolveDecorations(params.ornament_positions);
   const body = new THREE.Mesh(source.clone());
   body.scale.setScalar(scale);
 
-  const greenDetails = buildGreenDetails(source, scale, relief);
-  const redDetails = buildRedDetails(font, familyText, nameText, scale, relief);
+  const greenDetails = buildGreenDetails(source, decorations, scale, relief);
+  const redDetails = buildRedDetails(
+    font,
+    familyText,
+    nameText,
+    decorations,
+    scale,
+    relief,
+    familyTextScale,
+    nameTextScale,
+  );
 
   const parts: OrnamentPart[] = [
     {
@@ -65,7 +103,11 @@ export async function generateChristmasTreeOrnamentModel(
     },
   ];
 
-  return finalize(parts, `adorno-navidad-${slugify(nameText)}`);
+  return finalize(
+    parts,
+    `adorno-navidad-${slugify(nameText)}`,
+    buildDecorationHandles(decorations, scale),
+  );
 }
 
 async function loadTreeGeometry(): Promise<THREE.BufferGeometry> {
@@ -79,6 +121,7 @@ async function loadTreeGeometry(): Promise<THREE.BufferGeometry> {
 
 function buildGreenDetails(
   source: THREE.BufferGeometry,
+  decorations: DecorationPosition[],
   scale: number,
   relief: number,
 ): THREE.Group {
@@ -88,11 +131,9 @@ function buildGreenDetails(
   group.add(rimCap);
 
   const z = SOURCE_FACE_Z * scale;
-  addDisc(group, 27.5 * scale, 78 * scale, 1.75 * scale, z, relief);
-  addDisc(group, 53.5 * scale, 75 * scale, 2.05 * scale, z, relief);
-  addDisc(group, 40.5 * scale, 68.5 * scale, 1.25 * scale, z, relief);
-  addDisc(group, 18 * scale, 28.5 * scale, 1.45 * scale, z, relief);
-  addStar(group, 65.5 * scale, 16.5 * scale, 3.1 * scale, z, relief);
+  decorations
+    .filter((decoration) => decoration.color === 'green')
+    .forEach((decoration) => addDecoration(group, decoration, scale, z, relief));
 
   addFlourish(group, TREE_CENTER_X * scale, 35.5 * scale, z, relief, scale);
   return group;
@@ -102,8 +143,11 @@ function buildRedDetails(
   font: Font,
   familyText: string,
   nameText: string,
+  decorations: DecorationPosition[],
   scale: number,
   relief: number,
+  familyTextScale: number,
+  nameTextScale: number,
 ): THREE.Group {
   const group = new THREE.Group();
   const z = SOURCE_FACE_Z * scale;
@@ -116,22 +160,111 @@ function buildRedDetails(
       familyCenterY +
       ((familyLines.length - 1) * lineHeight) / 2 -
       index * lineHeight;
-    const text = buildText(font, line, 37 * scale, 10.5 * scale, relief);
+    const text = buildText(
+      font,
+      line,
+      37 * scale * familyTextScale,
+      10.5 * scale * familyTextScale,
+      relief,
+    );
     text.position.set(TREE_CENTER_X * scale, centerY, z);
     group.add(text);
   });
 
-  const name = buildText(font, nameText, 54 * scale, 17 * scale, relief);
+  const name = buildText(
+    font,
+    nameText,
+    54 * scale * nameTextScale,
+    17 * scale * nameTextScale,
+    relief,
+  );
   name.position.set(TREE_CENTER_X * scale, 20.5 * scale, z);
   group.add(name);
 
-  addStar(group, TREE_CENTER_X * scale, 88 * scale, 3.4 * scale, z, relief);
-  addStar(group, 14.5 * scale, 16.5 * scale, 3 * scale, z, relief);
-  addDisc(group, 17 * scale, 47 * scale, 1.35 * scale, z, relief);
-  addDisc(group, 65 * scale, 46 * scale, 1.5 * scale, z, relief);
-  addDisc(group, TREE_CENTER_X * scale, 34.5 * scale, 1.45 * scale, z, relief);
-  addDisc(group, 64 * scale, 29 * scale, 1.45 * scale, z, relief);
+  decorations
+    .filter((decoration) => decoration.color === 'red')
+    .forEach((decoration) => addDecoration(group, decoration, scale, z, relief));
   return group;
+}
+
+function resolveDecorations(
+  value: ProductParams[string] | undefined,
+): DecorationPosition[] {
+  const positions = parseNormalizedPositions(value);
+  return DECORATIONS.map((decoration) => {
+    const custom = positions[decoration.key];
+    return {
+      ...decoration,
+      currentX: custom
+        ? THREE.MathUtils.lerp(decoration.bounds.minX, decoration.bounds.maxX, custom.u)
+        : decoration.x,
+      currentY: custom
+        ? THREE.MathUtils.lerp(decoration.bounds.minY, decoration.bounds.maxY, custom.v)
+        : decoration.y,
+    };
+  });
+}
+
+function parseNormalizedPositions(
+  value: ProductParams[string] | undefined,
+): Record<string, { u: number; v: number }> {
+  if (typeof value !== 'string' || !value) return {};
+  try {
+    const parsed = JSON.parse(value) as Record<string, { u?: unknown; v?: unknown }>;
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([key, position]) => {
+        const u = Number(position?.u);
+        const v = Number(position?.v);
+        return Number.isFinite(u) && Number.isFinite(v)
+          ? [[key, {
+              u: THREE.MathUtils.clamp(u, 0, 1),
+              v: THREE.MathUtils.clamp(v, 0, 1),
+            }]]
+          : [];
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function addDecoration(
+  group: THREE.Group,
+  decoration: DecorationPosition,
+  scale: number,
+  z: number,
+  relief: number,
+) {
+  const args = [
+    group,
+    decoration.currentX * scale,
+    decoration.currentY * scale,
+    decoration.radius * scale,
+    z,
+    relief,
+  ] as const;
+  if (decoration.shape === 'star') addStar(...args);
+  else addDisc(...args);
+}
+
+function buildDecorationHandles(
+  decorations: DecorationPosition[],
+  scale: number,
+): NonNullable<GeneratedModel['metadata']>['mountingHoles'] {
+  return decorations.map((decoration) => ({
+    key: decoration.key,
+    kind: 'decoration' as const,
+    x: decoration.currentX * scale,
+    y: decoration.currentY * scale,
+    radius: Math.max(2.4, decoration.radius * scale),
+    depth: 0,
+    bounds: {
+      minX: decoration.bounds.minX * scale,
+      maxX: decoration.bounds.maxX * scale,
+      minY: decoration.bounds.minY * scale,
+      maxY: decoration.bounds.maxY * scale,
+    },
+  }));
 }
 
 /** Builds a thin, watertight copy of the raised rim's horizontal top face. */
@@ -358,7 +491,11 @@ function shapesBounds(shapes: THREE.Shape[]) {
   };
 }
 
-function finalize(parts: OrnamentPart[], name: string): GeneratedModel {
+function finalize(
+  parts: OrnamentPart[],
+  name: string,
+  decorationHandles: NonNullable<GeneratedModel['metadata']>['mountingHoles'],
+): GeneratedModel {
   const previewFiles = parts.map((part) => {
     const blob = exportObject(part.mesh);
     return {
@@ -384,8 +521,10 @@ function finalize(parts: OrnamentPart[], name: string): GeneratedModel {
     format: 'stl',
     metadata: {
       objects: parts.map((part) => part.object),
+      mountingHoles: decorationHandles,
       warnings: [
         'El archivo ZIP contiene una pieza STL por color para conservar la composición multicolor.',
+        'Los aros turquesa del visor son controles: arrástralos para mover los adornos; no aparecen en la descarga.',
       ],
     },
   };
