@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type { Font } from 'three/addons/loaders/FontLoader.js';
 import type { GeneratedModel, PreviewFile, ProductParams } from '../types';
 import { loadFont } from './signGenerator';
@@ -12,11 +13,10 @@ type OrnamentPart = {
   color: string;
 };
 
-const TREE_POINTS = [
-  [-10, -70], [-10, -60], [-46, -60], [-31, -31], [-39, -31],
-  [-21, 4], [-29, 4], [0, 66], [29, 4], [21, 4],
-  [39, -31], [31, -31], [46, -60], [10, -60], [10, -70],
-] as const;
+const SOURCE_WIDTH = 80.90521240234375;
+const SOURCE_FACE_Z = 2.7599985599517822;
+const SOURCE_RIM_Z = 4.731426239013672;
+const TREE_CENTER_X = SOURCE_WIDTH / 2;
 
 export async function generateChristmasTreeOrnamentModel(
   params: ProductParams,
@@ -26,32 +26,25 @@ export async function generateChristmasTreeOrnamentModel(
   if (!familyText) throw new Error('Agrega el texto de la familia.');
   if (!nameText) throw new Error('Agrega el nombre del adorno.');
 
-  const width = clampNumber(params.ornament_width_mm, 100, 70, 180);
-  const scale = width / 100;
-  const baseDepth = clampNumber(params.base_thickness_mm, 3, 1.6, 8);
-  const relief = clampNumber(params.relief_height_mm, 1, 0.4, 2.4);
-  const frameWidth = clampNumber(params.frame_width_mm, 2.4, 1.2, 5);
-  const holeDiameter = clampNumber(params.hanging_hole_diameter_mm, 8, 4, 14);
+  const width = clampNumber(params.ornament_width_mm, 81, 65, 150);
+  const scale = width / SOURCE_WIDTH;
+  const relief = clampNumber(params.relief_height_mm, 1.2, 0.6, 2.4);
   const font = await loadFont(stringParam(params.font, 'kaushan_script_regular'));
   const baseColor = stringParam(params.base_color, '#d9ae78');
   const greenColor = stringParam(params.frame_color, '#3f7d45');
   const redColor = stringParam(params.text_color, '#d72d22');
 
-  const body = buildBody(scale, baseDepth, holeDiameter);
-  const greenDetails = buildGreenDetails(scale, baseDepth, relief, frameWidth);
-  const redDetails = buildRedDetails(
-    font,
-    familyText,
-    nameText,
-    scale,
-    baseDepth,
-    relief,
-  );
+  const source = await loadTreeGeometry();
+  const body = new THREE.Mesh(source.clone());
+  body.scale.setScalar(scale);
+
+  const greenDetails = buildGreenDetails(source, scale, relief);
+  const redDetails = buildRedDetails(font, familyText, nameText, scale, relief);
 
   const parts: OrnamentPart[] = [
     {
       role: 'body',
-      object: 'arbol-base',
+      object: 'arbol-base-shapr3d',
       filename: 'adorno-navidad-base.stl',
       mesh: body,
       color: baseColor,
@@ -75,68 +68,33 @@ export async function generateChristmasTreeOrnamentModel(
   return finalize(parts, `adorno-navidad-${slugify(nameText)}`);
 }
 
-function buildBody(scale: number, depth: number, holeDiameter: number): THREE.Group {
-  const group = new THREE.Group();
-  group.add(new THREE.Mesh(extrudeShape(treeShape(scale), depth)));
-
-  const loopCenterY = 76 * scale;
-  const outerRadius = Math.max(holeDiameter / 2 + 3.2, 10.5 * scale);
-  const loop = new THREE.Shape();
-  loop.absarc(0, loopCenterY, outerRadius, 0, Math.PI * 2, false);
-  const hole = new THREE.Path();
-  hole.absarc(0, loopCenterY, holeDiameter / 2, 0, Math.PI * 2, true);
-  loop.holes.push(hole);
-  group.add(new THREE.Mesh(extrudeShape(loop, depth)));
-
-  const connector = new THREE.Mesh(
-    new THREE.BoxGeometry(Math.max(8 * scale, outerRadius * 0.9), 11 * scale, depth),
-  );
-  connector.position.set(0, 65.5 * scale, depth / 2);
-  group.add(connector);
-  return group;
+async function loadTreeGeometry(): Promise<THREE.BufferGeometry> {
+  const url = `${import.meta.env.BASE_URL}christmas-tree-assets/tree.stl`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('No se pudo cargar la base del árbol navideño.');
+  const geometry = new STLLoader().parse(await response.arrayBuffer());
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 function buildGreenDetails(
+  source: THREE.BufferGeometry,
   scale: number,
-  baseDepth: number,
   relief: number,
-  requestedFrameWidth: number,
 ): THREE.Group {
   const group = new THREE.Group();
-  const frameWidth = Math.min(requestedFrameWidth / scale, 4.5);
-  const outerScale = 0.955;
-  const innerScale = Math.max(0.82, outerScale - frameWidth / 48);
-  const frame = polygonShape(scalePoints(TREE_POINTS, scale * outerScale));
-  const innerPoints = scalePoints(TREE_POINTS, scale * innerScale).reverse();
-  frame.holes.push(new THREE.Path(innerPoints));
-  const frameMesh = new THREE.Mesh(extrudeShape(frame, relief));
-  frameMesh.position.z = baseDepth;
-  group.add(frameMesh);
+  const rimCap = new THREE.Mesh(buildTopCap(source, Math.min(0.8, relief * 0.55) / scale));
+  rimCap.scale.setScalar(scale);
+  group.add(rimCap);
 
-  addDisc(group, -19 * scale, 32 * scale, 2.1 * scale, baseDepth, relief);
-  addDisc(group, 18 * scale, 28 * scale, 2.4 * scale, baseDepth, relief);
-  addDisc(group, 0, 19 * scale, 1.5 * scale, baseDepth, relief);
-  addDisc(group, -27 * scale, -33 * scale, 1.8 * scale, baseDepth, relief);
-  addStar(group, 31 * scale, -50 * scale, 3.4 * scale, baseDepth, relief);
+  const z = SOURCE_FACE_Z * scale;
+  addDisc(group, 27.5 * scale, 78 * scale, 1.75 * scale, z, relief);
+  addDisc(group, 53.5 * scale, 75 * scale, 2.05 * scale, z, relief);
+  addDisc(group, 40.5 * scale, 68.5 * scale, 1.25 * scale, z, relief);
+  addDisc(group, 18 * scale, 28.5 * scale, 1.45 * scale, z, relief);
+  addStar(group, 65.5 * scale, 16.5 * scale, 3.1 * scale, z, relief);
 
-  const leftFlourish = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-7 * scale, -25 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(-17 * scale, -22 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(-27 * scale, -25 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(-30 * scale, -21 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(-27 * scale, -18 * scale, baseDepth + relief / 2),
-  ]);
-  const rightFlourish = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(7 * scale, -25 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(17 * scale, -22 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(27 * scale, -25 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(30 * scale, -21 * scale, baseDepth + relief / 2),
-    new THREE.Vector3(27 * scale, -18 * scale, baseDepth + relief / 2),
-  ]);
-  group.add(
-    new THREE.Mesh(new THREE.TubeGeometry(leftFlourish, 28, 0.75 * scale, 8, false)),
-    new THREE.Mesh(new THREE.TubeGeometry(rightFlourish, 28, 0.75 * scale, 8, false)),
-  );
+  addFlourish(group, TREE_CENTER_X * scale, 35.5 * scale, z, relief, scale);
   return group;
 }
 
@@ -145,53 +103,140 @@ function buildRedDetails(
   familyText: string,
   nameText: string,
   scale: number,
-  baseDepth: number,
   relief: number,
 ): THREE.Group {
   const group = new THREE.Group();
+  const z = SOURCE_FACE_Z * scale;
   const familyLines = wrapFamilyText(familyText);
-  const familyLineHeight = 17 * scale;
-  const familyCenterY = familyLines.length === 1 ? 0 : 7 * scale;
+  const lineHeight = 10.5 * scale;
+  const familyCenterY = familyLines.length === 1 ? 52 * scale : 55.5 * scale;
+
   familyLines.forEach((line, index) => {
     const centerY =
       familyCenterY +
-      (familyLines.length - 1) * familyLineHeight / 2 -
-      index * familyLineHeight;
-    const textHeight = 15 * scale;
-    const text = buildText(
-      font,
-      line,
-      safeTreeTextWidth(centerY, textHeight, scale, 5 * scale),
-      textHeight,
-      relief,
-    );
-    text.position.set(
-      0,
-      centerY,
-      baseDepth,
-    );
+      ((familyLines.length - 1) * lineHeight) / 2 -
+      index * lineHeight;
+    const text = buildText(font, line, 37 * scale, 10.5 * scale, relief);
+    text.position.set(TREE_CENTER_X * scale, centerY, z);
     group.add(text);
   });
 
-  const nameCenterY = -43 * scale;
-  const nameHeight = 21 * scale;
-  const name = buildText(
-    font,
-    nameText,
-    safeTreeTextWidth(nameCenterY, nameHeight, scale, 5 * scale),
-    nameHeight,
-    relief,
-  );
-  name.position.set(0, nameCenterY, baseDepth);
+  const name = buildText(font, nameText, 54 * scale, 17 * scale, relief);
+  name.position.set(TREE_CENTER_X * scale, 20.5 * scale, z);
   group.add(name);
 
-  addStar(group, 0, 49 * scale, 3.8 * scale, baseDepth, relief);
-  addStar(group, -31 * scale, -50 * scale, 3.3 * scale, baseDepth, relief);
-  addDisc(group, -31 * scale, -8 * scale, 1.5 * scale, baseDepth, relief);
-  addDisc(group, 31 * scale, -10 * scale, 1.7 * scale, baseDepth, relief);
-  addDisc(group, 0, -25 * scale, 1.7 * scale, baseDepth, relief);
-  addDisc(group, 28 * scale, -34 * scale, 1.7 * scale, baseDepth, relief);
+  addStar(group, TREE_CENTER_X * scale, 88 * scale, 3.4 * scale, z, relief);
+  addStar(group, 14.5 * scale, 16.5 * scale, 3 * scale, z, relief);
+  addDisc(group, 17 * scale, 47 * scale, 1.35 * scale, z, relief);
+  addDisc(group, 65 * scale, 46 * scale, 1.5 * scale, z, relief);
+  addDisc(group, TREE_CENTER_X * scale, 34.5 * scale, 1.45 * scale, z, relief);
+  addDisc(group, 64 * scale, 29 * scale, 1.45 * scale, z, relief);
   return group;
+}
+
+/** Builds a thin, watertight copy of the raised rim's horizontal top face. */
+function buildTopCap(source: THREE.BufferGeometry, depth: number): THREE.BufferGeometry {
+  const position = source.getAttribute('position');
+  const triangles: Array<[Point, Point, Point]> = [];
+  const edges = new Map<string, { count: number; start: Point; end: Point }>();
+
+  for (let index = 0; index < position.count; index += 3) {
+    const points = [0, 1, 2].map((offset) => ({
+      x: position.getX(index + offset),
+      y: position.getY(index + offset),
+    })) as [Point, Point, Point];
+    const isRimTop = [0, 1, 2].every(
+      (offset) => Math.abs(position.getZ(index + offset) - SOURCE_RIM_Z) < 0.01,
+    );
+    if (!isRimTop) continue;
+
+    if (cross2(points[0], points[1], points[2]) < 0) {
+      [points[1], points[2]] = [points[2], points[1]];
+    }
+    triangles.push(points);
+    addBoundaryEdge(edges, points[0], points[1]);
+    addBoundaryEdge(edges, points[1], points[2]);
+    addBoundaryEdge(edges, points[2], points[0]);
+  }
+
+  const vertices: number[] = [];
+  const indices: number[] = [];
+  const vertexIndices = new Map<string, number>();
+  const vertex = (point: Point, z: number) => {
+    const key = `${pointKey(point)}:${z.toFixed(4)}`;
+    const existing = vertexIndices.get(key);
+    if (existing !== undefined) return existing;
+    const next = vertices.length / 3;
+    vertices.push(point.x, point.y, z);
+    vertexIndices.set(key, next);
+    return next;
+  };
+  const bottomZ = SOURCE_RIM_Z;
+  const topZ = bottomZ + depth;
+
+  triangles.forEach(([a, b, c]) => {
+    indices.push(vertex(a, topZ), vertex(b, topZ), vertex(c, topZ));
+    indices.push(vertex(c, bottomZ), vertex(b, bottomZ), vertex(a, bottomZ));
+  });
+  edges.forEach(({ count, start, end }) => {
+    if (count !== 1) return;
+    const ab = vertex(start, bottomZ);
+    const bb = vertex(end, bottomZ);
+    const at = vertex(start, topZ);
+    const bt = vertex(end, topZ);
+    indices.push(ab, bb, bt, ab, bt, at);
+  });
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+type Point = { x: number; y: number };
+
+function addBoundaryEdge(
+  edges: Map<string, { count: number; start: Point; end: Point }>,
+  start: Point,
+  end: Point,
+) {
+  const startKey = pointKey(start);
+  const endKey = pointKey(end);
+  const key = startKey < endKey ? `${startKey}|${endKey}` : `${endKey}|${startKey}`;
+  const current = edges.get(key);
+  if (current) current.count += 1;
+  else edges.set(key, { count: 1, start, end });
+}
+
+function pointKey(point: Point): string {
+  return `${point.x.toFixed(4)},${point.y.toFixed(4)}`;
+}
+
+function cross2(a: Point, b: Point, c: Point): number {
+  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+function addFlourish(
+  group: THREE.Group,
+  centerX: number,
+  centerY: number,
+  z: number,
+  relief: number,
+  scale: number,
+) {
+  const makeCurve = (direction: -1 | 1) =>
+    new THREE.CatmullRomCurve3([
+      new THREE.Vector3(centerX + direction * 3 * scale, centerY, z + relief / 2),
+      new THREE.Vector3(centerX + direction * 10 * scale, centerY + 2 * scale, z + relief / 2),
+      new THREE.Vector3(centerX + direction * 17 * scale, centerY, z + relief / 2),
+      new THREE.Vector3(centerX + direction * 20.5 * scale, centerY + 3 * scale, z + relief / 2),
+      new THREE.Vector3(centerX + direction * 18.5 * scale, centerY + 5.5 * scale, z + relief / 2),
+    ]);
+  group.add(
+    new THREE.Mesh(new THREE.TubeGeometry(makeCurve(-1), 28, 0.65 * scale, 8, false)),
+    new THREE.Mesh(new THREE.TubeGeometry(makeCurve(1), 28, 0.65 * scale, 8, false)),
+  );
 }
 
 function buildText(
@@ -238,60 +283,6 @@ function wrapFamilyText(value: string): string[] {
     }
   }
   return [words.slice(0, bestIndex).join(' '), words.slice(bestIndex).join(' ')];
-}
-
-function safeTreeTextWidth(
-  centerY: number,
-  textHeight: number,
-  treeScale: number,
-  horizontalPadding: number,
-): number {
-  const polygon = scalePoints(TREE_POINTS, treeScale);
-  let safeWidth = Number.POSITIVE_INFINITY;
-  const samples = 12;
-  for (let sample = 0; sample <= samples; sample += 1) {
-    const y = centerY - textHeight / 2 + textHeight * sample / samples;
-    const intersections: number[] = [];
-    polygon.forEach((start, index) => {
-      const end = polygon[(index + 1) % polygon.length];
-      if ((start.y > y) === (end.y > y)) return;
-      const amount = (y - start.y) / (end.y - start.y);
-      intersections.push(THREE.MathUtils.lerp(start.x, end.x, amount));
-    });
-    intersections.sort((a, b) => a - b);
-    for (let index = 0; index + 1 < intersections.length; index += 2) {
-      const left = intersections[index];
-      const right = intersections[index + 1];
-      if (left <= 0 && right >= 0) {
-        safeWidth = Math.min(safeWidth, right - left - horizontalPadding * 2);
-        break;
-      }
-    }
-  }
-  return Number.isFinite(safeWidth)
-    ? Math.max(12 * treeScale, safeWidth)
-    : 12 * treeScale;
-}
-
-function treeShape(scale: number): THREE.Shape {
-  return polygonShape(scalePoints(TREE_POINTS, scale));
-}
-
-function polygonShape(points: THREE.Vector2[]): THREE.Shape {
-  const shape = new THREE.Shape();
-  points.forEach((point, index) => {
-    if (index === 0) shape.moveTo(point.x, point.y);
-    else shape.lineTo(point.x, point.y);
-  });
-  shape.closePath();
-  return shape;
-}
-
-function scalePoints(
-  points: ReadonlyArray<readonly [number, number]>,
-  scale: number,
-): THREE.Vector2[] {
-  return points.map(([x, y]) => new THREE.Vector2(x * scale, y * scale));
 }
 
 function extrudeShape(shape: THREE.Shape, depth: number): THREE.ExtrudeGeometry {
