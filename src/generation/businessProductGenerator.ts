@@ -27,6 +27,7 @@ export async function generateQrSignModel(
   const mount = stringParam(params.mount_style, 'tabletop');
   const title = stringParam(params.business_name, 'HORAMA CAFÉ').trim();
   const label = stringParam(params.qr_label, 'ESCANEA AQUÍ').trim();
+  const footer = stringParam(params.qr_footer, '').trim();
   const url = normalizeUrl(params.qr_url);
   const plateDepth = clampNumber(params.base_thickness_mm, 3.2, 1.6, 8);
   const relief = clampNumber(params.relief_height_mm, 0.8, 0.4, 2.4);
@@ -40,14 +41,30 @@ export async function generateQrSignModel(
     extrudeRoundedRectangle(size.width, size.height, radius, plateDepth),
   );
   const details = new THREE.Group();
-  const titleMesh = buildText(font, title, size.width * 0.78, size.height * 0.09, relief);
-  titleMesh.position.set(0, size.height * 0.38, plateDepth);
+  const titleMesh = buildText(font, title, size.width * 0.84, size.height * 0.09, relief);
+  titleMesh.position.set(0, size.height * 0.36, plateDepth);
   details.add(titleMesh);
-  const labelMesh = buildText(font, label, size.width * 0.7, size.height * 0.07, relief);
-  labelMesh.position.set(0, -size.height * 0.38, plateDepth);
+
+  // Match the WiFi sign's spacing and keep the QR's four-module quiet zone clear.
+  const addDivider = (widthRatio: number, yRatio: number, thickness = 1) => {
+    const divider = new THREE.Mesh(new THREE.BoxGeometry(size.width * widthRatio, thickness, relief));
+    divider.position.set(0, size.height * yRatio, plateDepth + relief / 2);
+    details.add(divider);
+  };
+  addDivider(0.82, 0.255);
+  const qr = buildQr(url, Math.min(size.width * 0.64, size.height * 0.48), plateDepth, relief);
+  qr.position.y = size.height * 0.005;
+  addDivider(0.78, -0.245);
+
+  const labelMesh = buildText(font, label, size.width * 0.78, size.height * 0.075, relief);
+  labelMesh.position.set(0, -size.height * 0.34, plateDepth);
   details.add(labelMesh);
-  const qr = buildQr(url, Math.min(size.width * 0.68, size.height * 0.58), plateDepth, relief);
-  qr.position.y = -size.height * 0.02;
+  if (footer) {
+    addDivider(0.72, -0.405, 0.9);
+    const footerMesh = buildText(font, footer, size.width * 0.76, size.height * 0.035, relief);
+    footerMesh.position.set(0, -size.height * 0.455, plateDepth);
+    details.add(footerMesh);
+  }
 
   const components: Component[] = [
     component('body', 'placa', 'placa-qr.stl', plate, plateColor, 'placa-qr'),

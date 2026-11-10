@@ -1326,6 +1326,7 @@ export const products: ProductDefinition[] = [
       },
       { kind: 'text', key: 'business_name', label: 'Business name', defaultValue: 'HORAMA CAFÉ', placeholder: 'Your business' },
       { kind: 'text', key: 'qr_label', label: 'Call to action', defaultValue: 'ESCANEA AQUÍ', placeholder: 'Scan here' },
+      { kind: 'text', key: 'qr_footer', label: 'Footer text (optional)', help: 'Appears below the QR text with a separator. Leave empty to hide both.', defaultValue: '', placeholder: 'Additional message' },
       { kind: 'text', key: 'qr_url', label: 'QR destination', help: 'Menu, social media, WhatsApp, reviews, payment, or contact URL.', defaultValue: 'https://horama3d.com', placeholder: 'https://...' },
       {
         kind: 'select',
