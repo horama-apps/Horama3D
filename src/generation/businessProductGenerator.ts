@@ -82,7 +82,8 @@ export async function generateQrSignModel(
     const baseText = stringParam(params.qr_base_text, '').trim();
     if (baseText) {
       const baseLabel = buildText(font, baseText, size.width * 0.84, 8, relief);
-      baseLabel.position.set(0, -12, baseDimensions.height);
+      baseLabel.rotation.x = baseDimensions.frontTextAngle;
+      baseLabel.position.set(0, baseDimensions.frontTextY, baseDimensions.frontTextZ);
       components.push(component(
         'text', 'texto-base', 'placa-qr-base-texto.stl', baseLabel, detailColor, 'base-qr',
       ));

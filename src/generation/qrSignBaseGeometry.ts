@@ -4,8 +4,11 @@ export function getQrSignBaseDimensions(plateWidth: number, plateThickness: numb
   return {
     width: plateWidth + 12,
     depth: 46,
-    height: 12,
-    floorThickness: 3,
+    height: 18,
+    floorThickness: 9,
+    frontTextY: -18.5,
+    frontTextZ: 10,
+    frontTextAngle: Math.atan2(12, 5),
     slotWidth: plateThickness + 0.6,
     slotCenterY: 6,
   };
@@ -20,12 +23,19 @@ export function buildQrSignBaseGeometry(plateWidth: number, plateThickness: numb
   const profile = new THREE.Shape();
   profile.moveTo(-depth / 2, 0);
   profile.lineTo(depth / 2, 0);
-  profile.lineTo(depth / 2, height);
+  // A low plinth, sloped shoulders and a narrow top bevel soften the silhouette.
+  profile.lineTo(depth / 2, 2);
+  profile.lineTo(depth / 2 - 2, 4);
+  profile.lineTo(depth / 2 - 6, height - 2);
+  profile.lineTo(depth / 2 - 8, height);
   profile.lineTo(rear, height);
   profile.lineTo(rear, floorThickness);
   profile.lineTo(front, floorThickness);
   profile.lineTo(front, height);
-  profile.lineTo(-depth / 2, height);
+  profile.lineTo(-depth / 2 + 9, height);
+  profile.lineTo(-depth / 2 + 7, height - 2);
+  profile.lineTo(-depth / 2 + 2, 4);
+  profile.lineTo(-depth / 2, 2);
   profile.closePath();
   const geometry = new THREE.ExtrudeGeometry(profile, {
     depth: width, bevelEnabled: false, steps: 1, curveSegments: 1,

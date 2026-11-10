@@ -1338,7 +1338,7 @@ export const products: ProductDefinition[] = [
           { label: 'Wall plate', value: 'wall' },
         ],
       },
-      { kind: 'text', key: 'qr_base_text', label: 'Base text (optional)', defaultValue: '', placeholder: 'Your message', help: 'Raised text on the top of the separate tabletop base.' },
+      { kind: 'text', key: 'qr_base_text', label: 'Base text (optional)', defaultValue: '', placeholder: 'Your message', help: 'Raised text on the sloped front of the separate tabletop base.' },
       { kind: 'select', key: 'font', label: 'Font', defaultValue: 'montserrat_regular', options: LETTER_FONT_OPTIONS },
       { kind: 'number', key: 'base_thickness_mm', label: 'Plate thickness', unit: 'mm', min: 1.6, max: 8, step: 0.2, defaultValue: 3.2 },
       { kind: 'number', key: 'relief_height_mm', label: 'Detail relief', unit: 'mm', min: 0.4, max: 2.4, step: 0.2, defaultValue: 0.8 },
