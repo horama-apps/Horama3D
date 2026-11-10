@@ -126,6 +126,7 @@ export function ParamPanel({
       !postProcessingParams.some((postParam) => postParam.key === param.key),
   );
   const visibleMainParams = mainParams.filter((param) => {
+    if (product.type === 'qr_sign' && param.key === 'qr_base_text' && params.mount_style !== 'tabletop') return false;
     if (
       (product.type === 'wifi_sign' || product.type === 'business_packages') &&
       param.key === 'wifi_password' &&

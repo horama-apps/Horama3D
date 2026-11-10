@@ -5,6 +5,7 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type { GeneratedModel, PreviewFile, ProductParams } from '../types';
 import { loadFont } from './signGenerator';
 import { generateTipJarModel } from './tipJarGenerator';
+import { buildQrSignBaseGeometry, getQrSignBaseDimensions } from './qrSignBaseGeometry';
 
 type Component = {
   role: PreviewFile['role'];
@@ -72,22 +73,29 @@ export async function generateQrSignModel(
     component('detail', 'codigo-qr', 'placa-qr-codigo.stl', qr, detailColor, 'placa-qr'),
   ];
   if (mount === 'tabletop') {
-    components.push(
-      component(
-        'support',
-        'base-de-mostrador',
-        'placa-qr-base.stl',
-        buildTabletopBase(size.width, plateDepth, size.height),
-        supportColor,
-        'placa-qr',
-      ),
-    );
+    const baseDimensions = getQrSignBaseDimensions(size.width, plateDepth);
+    components.push(component(
+      'support', 'base-de-mostrador', 'placa-qr-base.stl',
+      new THREE.Mesh(buildQrSignBaseGeometry(size.width, plateDepth)),
+      supportColor, 'base-qr',
+    ));
+    const baseText = stringParam(params.qr_base_text, '').trim();
+    if (baseText) {
+      const baseLabel = buildText(font, baseText, size.width * 0.84, 8, relief);
+      baseLabel.position.set(0, -12, baseDimensions.height);
+      components.push(component(
+        'text', 'texto-base', 'placa-qr-base-texto.stl', baseLabel, detailColor, 'base-qr',
+      ));
+    }
   }
 
   return finalize(
     components,
     `placa-qr-${slugify(label)}`,
-    ['Prueba el QR desde la vista previa y con una impresión de prueba antes de producir el lote.'],
+    [
+      'Prueba el QR desde la vista previa y con una impresión de prueba antes de producir el lote.',
+      ...(mount === 'tabletop' ? ['Imprime la placa y la base por separado. Inserta el borde inferior de la placa en la ranura de la base (holgura total de 0.6 mm).'] : []),
+    ],
   );
 }
 
