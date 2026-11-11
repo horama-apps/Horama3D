@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 export function getQrSignBaseDimensions(plateWidth: number, plateThickness: number) {
   return {
-    width: plateWidth + 12,
+    width: plateWidth,
     depth: 46,
     height: 18,
     floorThickness: 9,

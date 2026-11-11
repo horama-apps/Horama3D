@@ -30,7 +30,7 @@ for (const width of [105, 140, 180]) {
       const geometry = buildQrSignBaseGeometry(width, thickness);
       geometry.computeBoundingBox();
       const size = geometry.boundingBox.getSize(new THREE.Vector3());
-      assert.equal(size.x, width + 12);
+      assert.equal(size.x, width);
       assert.equal(size.y, 46);
       assert.equal(size.z, 18);
       assert.ok(Math.abs(dimensions.slotWidth - thickness - 0.2) < 1e-6);
