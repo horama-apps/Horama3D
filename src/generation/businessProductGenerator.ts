@@ -5,7 +5,8 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type { GeneratedModel, PreviewFile, ProductParams } from '../types';
 import { loadFont } from './signGenerator';
 import { generateTipJarModel } from './tipJarGenerator';
-import { buildQrSignBaseGeometry, engraveQrSignBase, placeQrSignBaseText } from './qrSignBaseGeometry';
+import { buildQrSignBaseGeometry, placeQrSignBaseText } from './qrSignBaseGeometry';
+import { engraveQrSignBase } from './qrSignBaseCutClient';
 
 type Component = {
   role: PreviewFile['role'];
@@ -89,9 +90,16 @@ export async function generateQrSignModel(
         // Extend only the cutting tool beyond the face; the colored insert ends flush.
         const cutter = baseLabel.geometry.clone();
         cutter.scale(1, 1, (engravingDepth + 0.05) / engravingDepth);
-        const engraved = engraveQrSignBase(baseGeometry, cutter, size.width, plateDepth, engravingDepth);
-        baseGeometry.dispose();
-        cutter.dispose();
+        let engraved: THREE.BufferGeometry;
+        try {
+          engraved = await engraveQrSignBase(baseGeometry, cutter, size.width, plateDepth, engravingDepth);
+        } catch (error) {
+          baseLabel.geometry.dispose();
+          throw error;
+        } finally {
+          baseGeometry.dispose();
+          cutter.dispose();
+        }
         baseGeometry = engraved;
         qrBaseCache?.geometry.dispose();
         qrBaseCache = { key: cacheKey, geometry: engraved.clone() };

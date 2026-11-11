@@ -1,7 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { buildQrSignBaseGeometry, getQrSignBaseDimensions, engraveQrSignBase, placeQrSignBaseText } from './qrSignBaseGeometry.ts';
+import { buildQrSignBaseGeometry, getQrSignBaseDimensions, placeQrSignBaseText } from './qrSignBaseGeometry.ts';
+
+import Module from 'manifold-3d';
+import { cutQrSignBase } from './qrSignBaseCut.ts';
+import { readFileSync } from 'node:fs';
+import { TTFLoader } from 'three/addons/loaders/TTFLoader.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+
+const wasm = await Module();
+wasm.setup();
+function engraveQrSignBase(base, text, width, thickness, depth) {
+  const tool = new THREE.Mesh(text);
+  placeQrSignBaseText(tool, width, thickness, depth);
+  tool.updateMatrixWorld(true);
+  const transformed = text.clone().applyMatrix4(tool.matrixWorld);
+  const flatten = (geometry) => new Float32Array((geometry.index ? geometry.toNonIndexed() : geometry).getAttribute('position').array);
+  const result = cutQrSignBase(wasm, flatten(base), flatten(transformed));
+  transformed.dispose();
+  return new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(result.positions, 3))
+    .setIndex(new THREE.BufferAttribute(result.indices, 1));
+}
 
 for (const width of [105, 140, 180]) {
   for (const thickness of [1.6, 3.2, 8]) {
@@ -76,4 +96,31 @@ test('colored text insert ends flush with the front and fills the engraved depth
   assert.ok(Math.abs(Math.max(...distances)) < 1e-6);
   assert.ok(Math.abs(Math.min(...distances) + depth) < 1e-6);
   geometry.dispose(); insert.material.dispose();
+});
+
+test('cuts a realistic long script inscription promptly', () => {
+  const bytes = readFileSync(new URL('../../public/fonts/satisfy_regular.ttf', import.meta.url));
+  const data = new TTFLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  const font = new FontLoader().parse(data);
+  const shapes = font.generateShapes('Boda Melissa & Erick Eduardo', 10).map((shape) => {
+    const points = shape.extractPoints(10);
+    const polygon = new THREE.Shape(points.shape);
+    polygon.holes = points.holes.map((hole) => new THREE.Path(hole));
+    return polygon;
+  });
+  const text = new THREE.ExtrudeGeometry(shapes, { depth: 0.85, bevelEnabled: false, curveSegments: 4 });
+  text.computeBoundingBox();
+  const bounds = text.boundingBox.clone();
+  const size = bounds.getSize(new THREE.Vector3());
+  const scale = Math.min(117.6 / size.x, 8 / size.y);
+  text.translate(-(bounds.min.x + bounds.max.x) / 2, -(bounds.min.y + bounds.max.y) / 2, 0);
+  text.scale(scale, scale, 1);
+  const base = buildQrSignBaseGeometry(140, 3.2);
+  const start = performance.now();
+  const result = engraveQrSignBase(base, text, 140, 3.2, 0.8);
+  const elapsed = performance.now() - start;
+  assert.ok(elapsed < 5000, `Text cut took ${elapsed.toFixed(0)} ms`);
+  assert.ok(result.getAttribute('position').count > 100);
+  console.log(`Long script text cut: ${elapsed.toFixed(0)} ms`);
+  result.dispose(); text.dispose(); base.dispose();
 });
