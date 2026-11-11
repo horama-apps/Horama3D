@@ -67,8 +67,8 @@ export const products: ProductDefinition[] = [
         kind: 'text',
         key: 'family_text',
         label: 'Texto de familia',
-        defaultValue: 'FAMILIA OJEDA',
-        placeholder: 'FAMILIA OJEDA',
+        defaultValue: 'FAMILIA HORAMA',
+        placeholder: 'FAMILIA HORAMA',
       },
       {
         kind: 'text',

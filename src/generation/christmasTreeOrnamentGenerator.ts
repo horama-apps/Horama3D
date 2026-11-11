@@ -47,7 +47,7 @@ const DECORATIONS: DecorationSpec[] = [
 export async function generateChristmasTreeOrnamentModel(
   params: ProductParams,
 ): Promise<GeneratedModel> {
-  const familyText = stringParam(params.family_text, 'FAMILIA OJEDA').trim();
+  const familyText = stringParam(params.family_text, 'FAMILIA HORAMA').trim();
   const nameText = stringParam(params.name_text, 'Laura').trim();
   if (!familyText) throw new Error('Agrega el texto de la familia.');
   if (!nameText) throw new Error('Agrega el nombre del adorno.');
