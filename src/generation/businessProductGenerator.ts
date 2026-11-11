@@ -5,7 +5,7 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type { GeneratedModel, PreviewFile, ProductParams } from '../types';
 import { loadFont } from './signGenerator';
 import { generateTipJarModel } from './tipJarGenerator';
-import { buildQrSignBaseGeometry, engraveQrSignBase } from './qrSignBaseGeometry';
+import { buildQrSignBaseGeometry, engraveQrSignBase, placeQrSignBaseText } from './qrSignBaseGeometry';
 
 type Component = {
   role: PreviewFile['role'];
@@ -20,6 +20,9 @@ type PlateSize = {
   width: number;
   height: number;
 };
+
+// Reuse the expensive text cut when only the URL, plate text or colors change.
+let qrBaseCache: { key: string; geometry: THREE.BufferGeometry } | undefined;
 
 export async function generateQrSignModel(
   params: ProductParams,
@@ -77,11 +80,26 @@ export async function generateQrSignModel(
     const baseText = stringParam(params.qr_base_text, '').trim();
     if (baseText) {
       const engravingDepth = Math.min(relief, 1.2);
-      const baseLabel = buildText(font, baseText, size.width * 0.84, 8, engravingDepth + 0.05);
-      const engraved = engraveQrSignBase(baseGeometry, baseLabel.geometry, size.width, plateDepth, engravingDepth);
-      baseGeometry.dispose();
-      baseLabel.geometry.dispose();
-      baseGeometry = engraved;
+      const cacheKey = JSON.stringify([size.width, plateDepth, baseText, params.font, engravingDepth]);
+      const baseLabel = buildText(font, baseText, size.width * 0.84, 8, engravingDepth, 4);
+      if (qrBaseCache?.key === cacheKey) {
+        baseGeometry.dispose();
+        baseGeometry = qrBaseCache.geometry.clone();
+      } else {
+        // Extend only the cutting tool beyond the face; the colored insert ends flush.
+        const cutter = baseLabel.geometry.clone();
+        cutter.scale(1, 1, (engravingDepth + 0.05) / engravingDepth);
+        const engraved = engraveQrSignBase(baseGeometry, cutter, size.width, plateDepth, engravingDepth);
+        baseGeometry.dispose();
+        cutter.dispose();
+        baseGeometry = engraved;
+        qrBaseCache?.geometry.dispose();
+        qrBaseCache = { key: cacheKey, geometry: engraved.clone() };
+      }
+      placeQrSignBaseText(baseLabel, size.width, plateDepth, engravingDepth);
+      components.push(component(
+        'text', 'texto-base', 'placa-qr-base-texto.stl', baseLabel, detailColor, 'base-qr',
+      ));
     }
     components.push(component(
       'support', 'base-de-mostrador', 'placa-qr-base.stl',
@@ -393,6 +411,7 @@ function buildText(
   maxWidth: number,
   maxHeight: number,
   depth: number,
+  curveSegments = 10,
 ): THREE.Mesh {
   const shapes = font.generateShapes(value.slice(0, 48), 10);
   const bounds = getShapesBounds(shapes);
@@ -400,12 +419,12 @@ function buildText(
     maxWidth / Math.max(bounds.width, 0.001),
     maxHeight / Math.max(bounds.height, 0.001),
   );
-  const scaledShapes = scaleShapes(shapes, scale);
+  const scaledShapes = scaleShapes(shapes, scale, Math.round(curveSegments * 2.4));
   const scaledBounds = getShapesBounds(scaledShapes);
   const geometry = new THREE.ExtrudeGeometry(scaledShapes, {
     depth,
     bevelEnabled: false,
-    curveSegments: 10,
+    curveSegments,
     steps: 1,
   });
   geometry.translate(
@@ -761,9 +780,9 @@ function starShape(radius: number): THREE.Shape {
   return shape;
 }
 
-function scaleShapes(shapes: THREE.Shape[], scale: number): THREE.Shape[] {
+function scaleShapes(shapes: THREE.Shape[], scale: number, divisions = 24): THREE.Shape[] {
   return shapes.map((shape) => {
-    const points = shape.extractPoints(24);
+    const points = shape.extractPoints(divisions);
     const scaled = new THREE.Shape(points.shape.map((point) => point.clone().multiplyScalar(scale)));
     scaled.holes = points.holes.map(
       (hole) => new THREE.Path(hole.map((point) => point.clone().multiplyScalar(scale))),

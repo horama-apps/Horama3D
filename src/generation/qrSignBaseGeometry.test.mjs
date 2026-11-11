@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { buildQrSignBaseGeometry, getQrSignBaseDimensions, engraveQrSignBase } from './qrSignBaseGeometry.ts';
+import { buildQrSignBaseGeometry, getQrSignBaseDimensions, engraveQrSignBase, placeQrSignBaseText } from './qrSignBaseGeometry.ts';
 
 for (const width of [105, 140, 180]) {
   for (const thickness of [1.6, 3.2, 8]) {
@@ -59,4 +59,21 @@ test('engraving cuts into the front without adding raised geometry', () => {
   geometry.computeBoundingBox();
   assert.equal(geometry.boundingBox.max.z, 18);
   base.dispose(); cutter.dispose(); geometry.dispose(); mesh.material.dispose();
+});
+
+test('colored text insert ends flush with the front and fills the engraved depth', () => {
+  const depth = 0.8;
+  const geometry = new THREE.BoxGeometry(10, 5, depth);
+  geometry.translate(0, 0, depth / 2);
+  const insert = new THREE.Mesh(geometry);
+  placeQrSignBaseText(insert, 140, 3.2, depth);
+  insert.updateMatrixWorld(true);
+  const normal = new THREE.Vector3(0, -12 / 13, 5 / 13);
+  const center = new THREE.Vector3(0, -18.5, 10);
+  const vertices = geometry.getAttribute('position');
+  const distances = Array.from({ length: vertices.count }, (_, i) =>
+    new THREE.Vector3().fromBufferAttribute(vertices, i).applyMatrix4(insert.matrixWorld).sub(center).dot(normal));
+  assert.ok(Math.abs(Math.max(...distances)) < 1e-6);
+  assert.ok(Math.abs(Math.min(...distances) + depth) < 1e-6);
+  geometry.dispose(); insert.material.dispose();
 });

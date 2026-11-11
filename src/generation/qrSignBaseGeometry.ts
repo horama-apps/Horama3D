@@ -68,3 +68,11 @@ export function engraveQrSignBase(base: THREE.BufferGeometry, text: THREE.Buffer
   result.geometry.computeVertexNormals();
   return result.geometry;
 }
+
+export function placeQrSignBaseText(text: THREE.Object3D, plateWidth: number,
+  plateThickness: number, depth: number) {
+  const dimensions = getQrSignBaseDimensions(plateWidth, plateThickness);
+  text.rotation.x = dimensions.frontTextAngle;
+  text.position.set(0, dimensions.frontTextY, dimensions.frontTextZ);
+  text.position.addScaledVector(new THREE.Vector3(0, -12 / 13, 5 / 13), -depth);
+}

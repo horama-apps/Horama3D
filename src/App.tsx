@@ -704,7 +704,7 @@ export function App() {
       }
     }, 300);
     return () => { cancelled = true; window.clearTimeout(timeoutId); };
-  }, [productType, paramsByType.qr_sign]);
+  }, [productType, paramsByType.qr_sign.qr_sign_size, paramsByType.qr_sign.base_thickness_mm]);
 
   useEffect(() => {
     if (
