@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 
 export function getQrSignBaseDimensions(plateWidth: number, plateThickness: number) {
   return {
@@ -9,7 +10,7 @@ export function getQrSignBaseDimensions(plateWidth: number, plateThickness: numb
     frontTextY: -18.5,
     frontTextZ: 10,
     frontTextAngle: Math.atan2(12, 5),
-    slotWidth: plateThickness + 0.6,
+    slotWidth: plateThickness + 0.2,
     slotCenterY: 6,
   };
 }
@@ -47,4 +48,23 @@ export function buildQrSignBaseGeometry(plateWidth: number, plateThickness: numb
     0, 0, 0, 1,
   ));
   return geometry;
+}
+
+// Cut into the front face; the cutter extends slightly outside to avoid coplanar faces.
+export function engraveQrSignBase(base: THREE.BufferGeometry, text: THREE.BufferGeometry,
+  plateWidth: number, plateThickness: number, depth: number) {
+  const dimensions = getQrSignBaseDimensions(plateWidth, plateThickness);
+  const normal = new THREE.Vector3(0, -12 / 13, 5 / 13);
+  const solid = new Brush(base);
+  const cutter = new Brush(text);
+  cutter.rotation.x = dimensions.frontTextAngle;
+  cutter.position.set(0, dimensions.frontTextY, dimensions.frontTextZ);
+  cutter.position.addScaledVector(normal, -depth);
+  solid.updateMatrixWorld(true);
+  cutter.updateMatrixWorld(true);
+  const evaluator = new Evaluator();
+  evaluator.useGroups = false;
+  const result = evaluator.evaluate(solid, cutter, SUBTRACTION);
+  result.geometry.computeVertexNormals();
+  return result.geometry;
 }

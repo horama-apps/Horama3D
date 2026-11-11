@@ -5,7 +5,7 @@ import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import type { GeneratedModel, PreviewFile, ProductParams } from '../types';
 import { loadFont } from './signGenerator';
 import { generateTipJarModel } from './tipJarGenerator';
-import { buildQrSignBaseGeometry, getQrSignBaseDimensions } from './qrSignBaseGeometry';
+import { buildQrSignBaseGeometry, engraveQrSignBase } from './qrSignBaseGeometry';
 
 type Component = {
   role: PreviewFile['role'];
@@ -73,21 +73,20 @@ export async function generateQrSignModel(
     component('detail', 'codigo-qr', 'placa-qr-codigo.stl', qr, detailColor, 'placa-qr'),
   ];
   if (mount === 'tabletop') {
-    const baseDimensions = getQrSignBaseDimensions(size.width, plateDepth);
-    components.push(component(
-      'support', 'base-de-mostrador', 'placa-qr-base.stl',
-      new THREE.Mesh(buildQrSignBaseGeometry(size.width, plateDepth)),
-      supportColor, 'base-qr',
-    ));
+    let baseGeometry: THREE.BufferGeometry = buildQrSignBaseGeometry(size.width, plateDepth);
     const baseText = stringParam(params.qr_base_text, '').trim();
     if (baseText) {
-      const baseLabel = buildText(font, baseText, size.width * 0.84, 8, relief);
-      baseLabel.rotation.x = baseDimensions.frontTextAngle;
-      baseLabel.position.set(0, baseDimensions.frontTextY, baseDimensions.frontTextZ);
-      components.push(component(
-        'text', 'texto-base', 'placa-qr-base-texto.stl', baseLabel, detailColor, 'base-qr',
-      ));
+      const engravingDepth = Math.min(relief, 1.2);
+      const baseLabel = buildText(font, baseText, size.width * 0.84, 8, engravingDepth + 0.05);
+      const engraved = engraveQrSignBase(baseGeometry, baseLabel.geometry, size.width, plateDepth, engravingDepth);
+      baseGeometry.dispose();
+      baseLabel.geometry.dispose();
+      baseGeometry = engraved;
     }
+    components.push(component(
+      'support', 'base-de-mostrador', 'placa-qr-base.stl',
+      new THREE.Mesh(baseGeometry), supportColor, 'base-qr',
+    ));
   }
 
   return finalize(
@@ -95,7 +94,7 @@ export async function generateQrSignModel(
     `placa-qr-${slugify(label)}`,
     [
       'Prueba el QR desde la vista previa y con una impresión de prueba antes de producir el lote.',
-      ...(mount === 'tabletop' ? ['Imprime la placa y la base por separado. Inserta el borde inferior de la placa en la ranura de la base (holgura total de 0.6 mm).'] : []),
+      ...(mount === 'tabletop' ? ['Imprime la placa y la base por separado. Inserta el borde inferior de la placa en la ranura de la base (holgura total de 0.2 mm).'] : []),
     ],
   );
 }

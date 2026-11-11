@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { buildQrSignBaseGeometry, getQrSignBaseDimensions } from './qrSignBaseGeometry.ts';
+import { buildQrSignBaseGeometry, getQrSignBaseDimensions, engraveQrSignBase } from './qrSignBaseGeometry.ts';
 
 for (const width of [105, 140, 180]) {
   for (const thickness of [1.6, 3.2, 8]) {
@@ -13,7 +13,7 @@ for (const width of [105, 140, 180]) {
       assert.equal(size.x, width + 12);
       assert.equal(size.y, 46);
       assert.equal(size.z, 18);
-      assert.ok(Math.abs(dimensions.slotWidth - thickness - 0.6) < 1e-6);
+      assert.ok(Math.abs(dimensions.slotWidth - thickness - 0.2) < 1e-6);
       const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
       mesh.updateMatrixWorld(true);
       const topAt = (x, y) => new THREE.Raycaster(
@@ -44,3 +44,19 @@ for (const width of [105, 140, 180]) {
     });
   }
 }
+
+test('engraving cuts into the front without adding raised geometry', () => {
+  const base = buildQrSignBaseGeometry(140, 3.2);
+  const cutter = new THREE.BoxGeometry(10, 5, 0.85);
+  cutter.translate(0, 0, 0.85 / 2);
+  const geometry = engraveQrSignBase(base, cutter, 140, 3.2, 0.8);
+  const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  mesh.updateMatrixWorld(true);
+  const normal = new THREE.Vector3(0, -12 / 13, 5 / 13);
+  const center = new THREE.Vector3(0, -18.5, 10);
+  const hit = new THREE.Raycaster(center.clone().addScaledVector(normal, 10), normal.clone().negate()).intersectObject(mesh)[0];
+  assert.ok(Math.abs(hit.distance - 10.8) < 1e-4);
+  geometry.computeBoundingBox();
+  assert.equal(geometry.boundingBox.max.z, 18);
+  base.dispose(); cutter.dispose(); geometry.dispose(); mesh.material.dispose();
+});

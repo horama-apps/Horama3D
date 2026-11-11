@@ -685,6 +685,28 @@ export function App() {
   };
 
   useEffect(() => {
+    if (productType !== 'qr_sign' || model?.source !== 'local') return;
+    let cancelled = false;
+    const timeoutId = window.setTimeout(async () => {
+      setIsGenerating(true);
+      try {
+        const generated = await generateQrSignModel(paramsByType.qr_sign);
+        if (cancelled) {
+          revokeLocalModelUrls(generated);
+          return;
+        }
+        setActiveModel(generated);
+        setStatus(t('status.generated'));
+      } catch (error) {
+        if (!cancelled) setStatus(error instanceof Error ? error.message : t('status.generationFailed'));
+      } finally {
+        if (!cancelled) setIsGenerating(false);
+      }
+    }, 300);
+    return () => { cancelled = true; window.clearTimeout(timeoutId); };
+  }, [productType, paramsByType.qr_sign]);
+
+  useEffect(() => {
     if (
       productType !== 'phone_case' ||
       !uploadedImageFile ||
