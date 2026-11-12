@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import packageMetadata from '../package.json';
 import {
   ChevronDown,
+  LayoutGrid,
   Download,
   FileUp,
   Loader2,
@@ -34,6 +35,9 @@ import { generateImageLayersLocally } from './generation/imageLayersGenerator';
 import { generateTapToPaySleeveLocally } from './generation/tapToPaySleeveGenerator';
 import { generatePhoneCaseLocally } from './generation/phoneCaseGenerator';
 import { generateBrandDecorationLocally } from './generation/brandDecorationGenerator';
+import { StudioCatalog } from './components/StudioCatalog';
+import { ModuleIcon } from './components/ModuleIcon';
+import { moduleDirectory, moduleOrder } from './products/moduleDirectory';
 import { ParamPanel } from './components/ParamPanel';
 import { Viewer3D } from './components/Viewer3D';
 import { PrintingCalculatorPage } from './printing-calculator/PrintingCalculatorPage';
@@ -42,7 +46,7 @@ import {
   getDefaultExportName,
   type DownloadFormat,
 } from './export/modelExport';
-import { getDefaultParams, getProduct, products } from './products/catalog';
+import { getDefaultParams, getProduct } from './products/catalog';
 import type {
   GeneratedModel,
   ModelBounds,
@@ -65,23 +69,6 @@ interface Toast {
 }
 
 const wipProductTypes: ProductType[] = [];
-const productsByConfigurator: Record<ConfiguratorMode, ProductType[]> = {
-  stl: ['lamp', 'urn', 'clicker', 'head_keychains', 'textures'],
-  image: ['image_layers', 'tap_to_pay_sleeve', 'phone_case', 'brand_decoration'],
-  create: [
-    'christmas_tree_ornament',
-    'signs',
-    'business_signage',
-    'qr_sign',
-    'wifi_sign',
-    'keychains',
-    'pet_keychains',
-    'bracelet_gems',
-    'tip_jar',
-    'display_accessories',
-    'business_packages',
-  ],
-};
 const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
   stl: 'lamp',
   image: 'image_layers',
@@ -165,12 +152,13 @@ export function App() {
     [],
   );
   const [configuratorMode, setConfiguratorMode] =
-    useState<ConfiguratorMode>(isDemoMode ? 'create' : 'stl');
+    useState<ConfiguratorMode>('create');
   const [workspaceView, setWorkspaceView] =
-    useState<WorkspaceView>(isDemoMode ? 'create' : 'stl');
+    useState<WorkspaceView>('create');
   const [productType, setProductType] = useState<ProductType>(
-    isDemoMode ? 'christmas_tree_ornament' : 'lamp',
+    isDemoMode ? 'christmas_tree_ornament' : 'qr_sign',
   );
+  const [studioView, setStudioView] = useState<'catalog' | 'editor'>(isDemoMode ? 'editor' : 'catalog');
   const product = useMemo(() => getProduct(productType), [productType]);
   const [paramsByType, setParamsByType] = useState<
     Record<ProductType, ProductParams>
@@ -203,7 +191,7 @@ export function App() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedImageFile, setUploadedImageFile] = useState<File | null>(null);
   const [status, setStatus] = useState(
-    t('status.loadStl'),
+    isDemoMode ? t('products.christmas_tree_ornament.description') : t('status.configureQrSign'),
   );
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -236,11 +224,9 @@ export function App() {
     [paramsByType.phone_case],
   );
   const visibleProducts = useMemo(
-    () =>
-      products.filter((item) =>
-        productsByConfigurator[configuratorMode].includes(item.type),
-      ),
-    [configuratorMode],
+    () => moduleOrder.filter((type) => moduleDirectory[type].category === moduleDirectory[productType].category
+      && (!isDemoMode || moduleDirectory[type].mode === 'create')).map(getProduct),
+    [productType, isDemoMode],
   );
   const isWipProduct = isWipProductType(productType);
   const requiresUploadedModel = !isLocalCreator(productType);
@@ -853,6 +839,12 @@ export function App() {
   );
 
   const selectProduct = (nextType: ProductType) => {
+    const nextMode = moduleDirectory[nextType].mode;
+    if (isDemoMode && nextMode !== 'create') return;
+    setStudioView('editor');
+    if (nextType === productType) return;
+    setConfiguratorMode(nextMode);
+    setWorkspaceView(nextMode);
     setProductType(nextType);
     setShouldCollapseSetup(false);
     setIsCutPlaneDismissed(false);
@@ -938,6 +930,7 @@ export function App() {
       return;
     }
     setWorkspaceView(nextView);
+    setStudioView('editor');
     selectConfiguratorMode(nextView);
   };
 
@@ -1088,7 +1081,7 @@ export function App() {
   const runDownload = async (format = downloadFormat) => {
     if (isDemoMode || !model || model.source === 'empty' || isExporting) return;
 
-    const requestedFormat = isLocalCreator(productType) ? 'stl' : format;
+    const requestedFormat = format;
     setDownloadFormat(requestedFormat);
     setHasUsedViewerActions(true);
     setIsExporting(true);
@@ -1104,7 +1097,7 @@ export function App() {
     try {
       let exported: { blob: Blob; filename: string };
       if (
-        isLocalCreator(productType) &&
+        requestedFormat === 'stl' && isLocalCreator(productType) &&
         (!model.previewFiles || model.previewFiles.length <= 1)
       ) {
         let localBlob = model.blob;
@@ -1170,41 +1163,18 @@ export function App() {
   }
 
   return (
-    <main
-      className={isDemoMode ? 'app-shell app-shell-demo' : 'app-shell'}
-      style={{ '--accent': product.accent } as React.CSSProperties}
-    >
-      <aside className='panel panel-left'>
-        <div className='brand'>
-          <button
-            type='button'
-            className='brand-mark brand-mark-button'
-            aria-label='Abrir Horama'
-            onClick={() => selectWorkspaceView('calculator')}
-          >
-            <img
-              src={`${import.meta.env.BASE_URL}horama-mark.svg`}
-              alt='Horama'
-            />
-          </button>
-          <div className='configurator-selector configurator-selector-brand'>
-            <select
-              aria-label={t('configurator.label')}
-              value={configuratorMode}
-              onChange={(event) =>
-                selectWorkspaceView(event.target.value as WorkspaceView)
-              }
-            >
-              <option value='stl' disabled={isDemoMode}>{t('configurator.stl')}</option>
-              <option value='image' disabled={isDemoMode}>{t('configurator.image')}</option>
-              <option value='create'>{t('configurator.create')}</option>
-            </select>
-          </div>
-        </div>
-
-        <div className='product-list'>
-          {configuratorMode === 'stl' || isImageProduct(productType) ? (
-            <div className='upload-card'>
+    <div className='studio-app'>
+      <header className='studio-header'>
+        <button type='button' className='studio-wordmark' onClick={() => setStudioView('catalog')} aria-label='Horama3D'>
+          <img src={`${import.meta.env.BASE_URL}horama-mark.svg`} alt='' />horama<span>3D</span>
+        </button>
+        <nav className='studio-primary-nav' aria-label={t('studio.modules')}>
+          <button type='button' aria-current={studioView === 'catalog' ? 'page' : undefined} onClick={() => setStudioView('catalog')}>{t('studio.modules')}</button>
+          <button type='button' aria-current={studioView === 'editor' ? 'page' : undefined} onClick={() => setStudioView('editor')}>{t('studio.editor')}</button>
+          {!isDemoMode && <button type='button' onClick={() => selectWorkspaceView('calculator')}>{t('studio.quote')}</button>}
+        </nav>
+        <span className='studio-tagline'>{t('studio.tagline')}</span><LanguageMenu />
+      </header>
             <input
               ref={uploadInputRef}
               className='file-input'
@@ -1214,6 +1184,18 @@ export function App() {
                 ? loadImageFile(event.target.files?.[0])
                 : void loadStlFile(event.target.files?.[0])}
             />
+
+      {studioView === 'catalog' ? <StudioCatalog active={productType} demo={isDemoMode} disabled={isGenerating || isAnalyzing || isExporting}
+        onOpen={selectProduct} onResume={() => setStudioView('editor')} /> : <main
+      className={isDemoMode ? 'app-shell studio-editor app-shell-demo' : 'app-shell studio-editor'}
+      style={{ '--accent': product.accent } as React.CSSProperties}
+    >
+      <aside className='panel panel-left'>
+        <button type='button' className='studio-back-button' onClick={() => setStudioView('catalog')}><LayoutGrid size={17} />{t('studio.all')}</button>
+        <p className='studio-eyebrow studio-editor-category'>{t(`studio.categories.${moduleDirectory[productType].category}`)}</p>
+        <div className='product-list'>
+          {configuratorMode === 'stl' || isImageProduct(productType) ? (
+            <div className='upload-card'>
             <button
               className='upload-button'
               disabled={isAnalyzing}
@@ -1239,38 +1221,10 @@ export function App() {
           ) : null}
 
           {visibleProducts.map((item) => (
-            <button
-              className={
-                item.type === productType
-                  ? 'product-button active'
-                  : 'product-button'
-              }
-              key={item.type}
-              style={{ '--product-accent': item.accent } as React.CSSProperties}
-              disabled={
-                (
-                  Boolean(uploadedFile) &&
-                  !isModelValidated &&
-                  item.type !== 'head_keychains' &&
-                  !isWipProductType(item.type)
-                ) ||
-                (
-                  isLocked &&
-                  !isLocalCreator(item.type) &&
-                  !isWipProductType(item.type) &&
-                  !isWipProduct &&
-                  !(item.type === 'head_keychains' && uploadedFile)
-                )
-              }
-              onClick={() => selectProduct(item.type)}
-            >
-              <span className='product-button-title'>
-                {t(`products.${item.type}.name`, { defaultValue: item.name })}
-                {isWipProductType(item.type) ? (
-                  <span className='wip-badge'>{t('common.wip')}</span>
-                ) : null}
-              </span>
-              <small>{t(`products.${item.type}.description`, { defaultValue: item.description })}</small>
+            <button type='button' key={item.type} className={item.type === productType ? 'studio-module-link active' : 'studio-module-link'}
+              disabled={isGenerating || isAnalyzing || isExporting} aria-current={item.type === productType ? 'page' : undefined} onClick={() => selectProduct(item.type)}>
+              <ModuleIcon name={moduleDirectory[item.type].icon} size={17} />
+              <span>{t(`products.${item.type}.name`, { defaultValue: item.name })}</span>
             </button>
           ))}
         </div>
@@ -1299,6 +1253,15 @@ export function App() {
       </aside>
 
       <section className={isLocked ? 'stage stage-disabled' : 'stage'}>
+        <div className='studio-stage-heading'><div><p className='studio-eyebrow'>{t(`studio.categories.${moduleDirectory[productType].category}`)} / {t(`studio.inputs.${moduleDirectory[productType].mode}`)}</p>
+          <h1>{t(`products.${productType}.name`, { defaultValue: product.name })}</h1></div>
+          <div className='studio-stage-actions'>
+            {!isLocalCreator(productType) && <button type='button' className='studio-button studio-mobile-upload' disabled={isAnalyzing || isGenerating} onClick={() => uploadInputRef.current?.click()}>
+              <FileUp size={15} />{t(isImageProduct(productType) ? 'upload.loadImage' : 'upload.load')}
+            </button>}
+            <button type='button' className='studio-button' onClick={() => setStudioView('catalog')}><LayoutGrid size={15} />{t('studio.change')}</button>
+          </div>
+        </div>
         <div
           className={
             shouldExpandViewerActions
@@ -1329,22 +1292,6 @@ export function App() {
             <RotateCcw size={17} />
             <span>{t('common.reset')}</span>
           </button>
-          {isLocalCreator(productType) ? (
-            <button
-              className='tool-action'
-              disabled={!canDownload || isExporting}
-              aria-label={`${t('common.download')} ${model?.name ?? `${productType}.stl`}`}
-              title={t('common.download')}
-              onClick={() => void runDownload('stl')}
-            >
-              {isExporting ? (
-                <Loader2 className='spin' size={17} />
-              ) : (
-                <Download size={17} />
-              )}
-              <span>{t('common.download')}</span>
-            </button>
-          ) : (
             <div className='download-menu' ref={downloadMenuRef}>
               <button
                 className='tool-action download-menu-trigger'
@@ -1382,7 +1329,6 @@ export function App() {
                 </div>
               ) : null}
             </div>
-          )}
         </div>
         <Viewer3D
           productType={productType}
@@ -1428,7 +1374,7 @@ export function App() {
           (model?.source === 'local' && ['lamp', 'urn', 'clicker'].includes(productType))
         }
         shouldCollapseSetup={shouldCollapseSetup}
-        headerAction={<LanguageMenu />}
+        headerAction={<span className="studio-eyebrow">{t("studio.customize")}</span>}
         onChange={updateParam}
       />
 
@@ -1485,7 +1431,9 @@ export function App() {
             </div>
           ))}
       </div>
-    </main>
+    </main>}
+      <footer className='studio-footer'><span><i aria-hidden='true' />{t('studio.local')}</span><span>{t('studio.ready')}</span><span>v{packageMetadata.version}</span></footer>
+    </div>
   );
 }
 

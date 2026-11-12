@@ -23,6 +23,8 @@ interface ExportPart {
   url: string;
   color?: string;
   meshType?: 'normal_part' | 'modifier_part';
+  previewPosition?: [number, number, number];
+  previewRotation?: [number, number, number];
 }
 
 interface ExportMaterial {
@@ -141,9 +143,15 @@ async function export3mf(
       const bytes = await fetchBytes(part.url);
       const roleResult = getPartRole(productType, part);
       const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      const geometry = loader.parse(buffer);
+      if (part.previewRotation) {
+        geometry.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...part.previewRotation)));
+      }
+      if (part.previewPosition) geometry.translate(...part.previewPosition);
       const mesh = (productType === 'tap_to_pay_sleeve' || productType === 'phone_case') && roleResult.role === 'body'
         ? await stlToManifoldMeshData(buffer)
-        : geometryToMeshData(loader.parse(buffer));
+        : geometryToMeshData(geometry);
+      geometry.dispose();
       return {
         part,
         role: roleResult.role,
@@ -242,6 +250,8 @@ function getExportParts(model: GeneratedModel, productType: ProductType): Export
         url: file.url,
         color: file.color,
         meshType: file.meshType,
+        previewPosition: file.previewPosition,
+        previewRotation: file.previewRotation,
       }));
   }
 

@@ -1,9 +1,11 @@
 import i18n from 'i18next';
+import { studioTranslations } from './components/studioTranslations';
 import { initReactI18next } from 'react-i18next';
 
 const resources = {
   es: {
     translation: {
+      studio: studioTranslations.es,
       language: { label: 'Idioma', es: 'Español', en: 'English', fr: 'Français' },
       configurator: {
         label: 'Tipo de configurador',
@@ -121,6 +123,7 @@ const resources = {
   },
   en: {
     translation: {
+      studio: studioTranslations.en,
       language: { label: 'Language', es: 'Español', en: 'English', fr: 'Français' },
       configurator: { label: 'Configurator type', stl: 'STL', image: 'IMG to STL', create: 'Create from Scratch' },
       common: { generate: 'Generate', reset: 'Reset', download: 'Download', show: 'Show', hide: 'Hide', setup: 'Setup', finishing: 'Finishing and textures', customization: 'Customization', transformInfo: 'Transform info', generalInfo: 'General information', wip: 'WIP', workInProgress: 'work in progress', objects: 'Objects' },
@@ -177,6 +180,7 @@ const resources = {
   },
   fr: {
     translation: {
+      studio: studioTranslations.fr,
       language: { label: 'Langue', es: 'Español', en: 'English', fr: 'Français' },
       configurator: { label: 'Type de configurateur', stl: 'STL', image: 'IMG vers STL', create: 'Créer de zéro' },
       common: { generate: 'Générer', reset: 'Réinitialiser', download: 'Télécharger', show: 'Afficher', hide: 'Masquer', setup: 'Configuration', finishing: 'Finition et textures', customization: 'Personnalisation', transformInfo: 'Informations de transformation', generalInfo: 'Informations générales', wip: 'WIP', workInProgress: 'travail en cours', objects: 'Objets' },

@@ -92,7 +92,12 @@ export function Viewer3D({
 
     const host = hostRef.current;
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf5f3ee);
+    const appearance = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateAppearance = () => {
+      scene.background = new THREE.Color(appearance.matches ? 0x182124 : 0xf1f3ee);
+    };
+    updateAppearance();
+    appearance.addEventListener('change', updateAppearance);
 
     const camera = new THREE.PerspectiveCamera(
       42,
@@ -121,6 +126,16 @@ export function Viewer3D({
     grid.rotation.x = Math.PI / 2;
     grid.position.z = -0.6;
     scene.add(grid);
+    const updateGridAppearance = () => {
+      const materials = Array.isArray(grid.material) ? grid.material : [grid.material];
+      materials.forEach((material) => {
+        material.transparent = true;
+        material.opacity = appearance.matches ? 0.18 : 0.5;
+        material.depthWrite = false;
+      });
+    };
+    updateGridAppearance();
+    appearance.addEventListener('change', updateGridAppearance);
 
     const resizeGrid = (bounds: ModelBounds | null) => {
       const requiredSize = bounds
@@ -377,6 +392,8 @@ export function Viewer3D({
       camera.updateProjectionMatrix();
     };
     window.addEventListener('resize', onResize);
+    const observer = new ResizeObserver(onResize);
+    observer.observe(host);
 
     let raf = 0;
     const animate = () => {
@@ -400,7 +417,10 @@ export function Viewer3D({
       frameModel,
       cleanup: () => {
         cancelAnimationFrame(raf);
+        observer.disconnect();
         window.removeEventListener('resize', onResize);
+        appearance.removeEventListener('change', updateAppearance);
+        appearance.removeEventListener('change', updateGridAppearance);
         renderer.domElement.removeEventListener('pointerdown', onMarkerPointerDown, true);
         renderer.domElement.removeEventListener('pointermove', onMarkerPointerMove, true);
         renderer.domElement.removeEventListener('pointerup', finishMarkerDrag, true);
