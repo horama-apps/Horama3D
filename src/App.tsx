@@ -69,11 +69,6 @@ interface Toast {
 }
 
 const wipProductTypes: ProductType[] = [];
-const defaultProductByConfigurator: Record<ConfiguratorMode, ProductType> = {
-  stl: 'lamp',
-  image: 'image_layers',
-  create: 'christmas_tree_ornament',
-};
 const configureStatusByProduct: Partial<Record<ProductType, string>> = {
   signs: 'status.configureSign',
   pet_keychains: 'status.configurePetKeychain',
@@ -159,6 +154,8 @@ export function App() {
     isDemoMode ? 'christmas_tree_ornament' : 'qr_sign',
   );
   const [studioView, setStudioView] = useState<'catalog' | 'editor'>(isDemoMode ? 'editor' : 'catalog');
+  const [calculatorOpened, setCalculatorOpened] = useState(false);
+  const [returnView, setReturnView] = useState<'catalog' | 'editor'>('catalog');
   const product = useMemo(() => getProduct(productType), [productType]);
   const [paramsByType, setParamsByType] = useState<
     Record<ProductType, ProductParams>
@@ -883,55 +880,11 @@ export function App() {
     }
   };
 
-  const selectConfiguratorMode = (nextMode: ConfiguratorMode) => {
-    if (isDemoMode && nextMode !== 'create') return;
-
-    const nextProduct = defaultProductByConfigurator[nextMode];
-    setConfiguratorMode(nextMode);
-    setProductType(nextProduct);
-    setShouldCollapseSetup(false);
-    setIsCutPlaneDismissed(false);
-    setHasUsedViewerActions(false);
-    setSignHolePositions({});
-    setPetHolePosition({ u: 0.18, v: 0.72 });
-
-    if (nextMode === 'stl' && uploadedFile) {
-      restoreUploadedModel(
-        isModelValidated
-          ? t('status.stlReady')
-          : t('status.invalidStlHeadKeychainReady'),
-      );
-      return;
-    }
-
-    if (nextMode === 'image' && uploadedImageFile) {
-      setActiveModel({ source: 'empty', format: 'stl' });
-      setIsModelValidated(true);
-      setDownloadFormat('3mf');
-      setStatus(t('status.imageReady'));
-      return;
-    }
-
-    setActiveModel({ source: 'empty', format: 'stl' });
-    setIsModelValidated(false);
-    setModelBounds(null);
-    setStatus(
-      nextMode === 'stl'
-        ? t('status.loadStl')
-        : nextMode === 'create'
-          ? t('status.configureSign')
-          : t('status.loadImage'),
-    );
-  };
-
-  const selectWorkspaceView = (nextView: WorkspaceView) => {
-    if (nextView === 'calculator') {
-      setWorkspaceView('calculator');
-      return;
-    }
-    setWorkspaceView(nextView);
-    setStudioView('editor');
-    selectConfiguratorMode(nextView);
+  const openCalculator = () => {
+    if (workspaceView === 'calculator') return;
+    setReturnView(studioView);
+    setCalculatorOpened(true);
+    setWorkspaceView('calculator');
   };
 
   const resetParams = () => {
@@ -1153,25 +1106,18 @@ export function App() {
   const shouldExpandViewerActions = !isLocked && !hasUsedViewerActions;
   const downloadFormats: DownloadFormat[] = ['stl', '3mf'];
 
-  if (workspaceView === 'calculator') {
-    return (
-      <PrintingCalculatorPage
-        currentConfiguratorMode={configuratorMode}
-        onNavigate={selectWorkspaceView}
-      />
-    );
-  }
+  const showStudio = (view: 'catalog' | 'editor') => {
+    setWorkspaceView(configuratorMode);
+    setStudioView(view);
+  };
 
   return (
     <div className='studio-app'>
       <header className='studio-header'>
-        <button type='button' className='studio-wordmark' onClick={() => setStudioView('catalog')} aria-label='Horama3D'>
-          <img src={`${import.meta.env.BASE_URL}horama-mark.svg`} alt='' />horama<span>3D</span>
-        </button>
         <nav className='studio-primary-nav' aria-label={t('studio.modules')}>
-          <button type='button' aria-current={studioView === 'catalog' ? 'page' : undefined} onClick={() => setStudioView('catalog')}>{t('studio.modules')}</button>
-          <button type='button' aria-current={studioView === 'editor' ? 'page' : undefined} onClick={() => setStudioView('editor')}>{t('studio.editor')}</button>
-          {!isDemoMode && <button type='button' onClick={() => selectWorkspaceView('calculator')}>{t('studio.quote')}</button>}
+          <button type='button' aria-current={workspaceView !== 'calculator' && studioView === 'catalog' ? 'page' : undefined} onClick={() => showStudio('catalog')}>{t('studio.modules')}</button>
+          <button type='button' aria-current={workspaceView !== 'calculator' && studioView === 'editor' ? 'page' : undefined} onClick={() => showStudio('editor')}>{t('studio.editor')}</button>
+          {!isDemoMode && <button type='button' aria-current={workspaceView === 'calculator' ? 'page' : undefined} onClick={openCalculator}>{t('studio.quote')}</button>}
         </nav>
         <span className='studio-tagline'>{t('studio.tagline')}</span><LanguageMenu />
       </header>
@@ -1185,7 +1131,10 @@ export function App() {
                 : void loadStlFile(event.target.files?.[0])}
             />
 
-      {studioView === 'catalog' ? <StudioCatalog active={productType} demo={isDemoMode} disabled={isGenerating || isAnalyzing || isExporting}
+      {calculatorOpened && <div className='studio-calculator-host' hidden={workspaceView !== 'calculator'}>
+        <PrintingCalculatorPage onReturn={() => showStudio(returnView)} returnLabel={t(returnView === 'editor' ? 'studio.returnEditor' : 'studio.returnModules')} initialProductName={returnView === 'editor' ? t(`products.${productType}.name`, { defaultValue: product.name }) : undefined} />
+      </div>}
+      {workspaceView === 'calculator' ? null : studioView === 'catalog' ? <StudioCatalog active={productType} demo={isDemoMode} disabled={isGenerating || isAnalyzing || isExporting}
         onOpen={selectProduct} onResume={() => setStudioView('editor')} /> : <main
       className={isDemoMode ? 'app-shell studio-editor app-shell-demo' : 'app-shell studio-editor'}
       style={{ '--accent': product.accent } as React.CSSProperties}

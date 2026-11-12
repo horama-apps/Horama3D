@@ -1,5 +1,6 @@
 export const studioTranslations = {
   es: {
+    returnEditor: 'Regresar al editor', returnModules: 'Regresar a módulos',
     modules: 'Módulos', editor: 'Editor', quote: 'Cotizar', tagline: 'Tu idea, lista para imprimir.',
     collection: 'Colección Horama', question: '¿Qué quieres crear?', all: 'Todos los módulos',
     search: 'Buscar entre {{count}} módulos', results: '{{count}} módulos', choose: 'Elige uno para personalizar',
@@ -14,6 +15,7 @@ export const studioTranslations = {
     printing: 'Ajustes de impresión',
   },
   en: {
+    returnEditor: 'Back to editor', returnModules: 'Back to modules',
     modules: 'Modules', editor: 'Editor', quote: 'Pricing', tagline: 'Your idea, ready to print.',
     collection: 'Horama collection', question: 'What will you create?', all: 'All modules',
     search: 'Search {{count}} modules', results: '{{count}} modules', choose: 'Choose one to customize',
@@ -27,6 +29,7 @@ export const studioTranslations = {
     imageNote: 'Start with a PNG, JPG or WebP image.', stlNote: 'Load your model to start transforming it.', printing: 'Print settings',
   },
   fr: {
+    returnEditor: 'Retour à l’éditeur', returnModules: 'Retour aux modules',
     modules: 'Modules', editor: 'Éditeur', quote: 'Devis', tagline: 'Votre idée, prête à imprimer.',
     collection: 'Collection Horama', question: 'Que voulez-vous créer ?', all: 'Tous les modules',
     search: 'Rechercher parmi {{count}} modules', results: '{{count}} modules', choose: 'Choisissez un module à personnaliser',

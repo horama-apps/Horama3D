@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  AlertTriangle,
+  ArrowLeft,
   Calculator,
   CircleDollarSign,
   Clock3,
@@ -44,11 +44,10 @@ type NumericField =
   | 'quantity'
   | 'additionalCosts';
 
-type ConfiguratorDestination = 'stl' | 'image' | 'create';
-
 interface PrintingCalculatorPageProps {
-  currentConfiguratorMode: ConfiguratorDestination;
-  onNavigate: (destination: ConfiguratorDestination) => void;
+  onReturn: () => void;
+  returnLabel: string;
+  initialProductName?: string;
 }
 
 interface CartProduct extends PrintingQuoteProduct {
@@ -75,13 +74,14 @@ function getLocalDateValue(): string {
 }
 
 export function PrintingCalculatorPage({
-  currentConfiguratorMode,
-  onNavigate,
+  onReturn,
+  returnLabel,
+  initialProductName,
 }: PrintingCalculatorPageProps) {
   const [settings, setSettings] = useState<PrintingCalculatorSettings>(
     loadPrintingCalculatorSettings,
   );
-  const [productName, setProductName] = useState('');
+  const [productName, setProductName] = useState(initialProductName ?? '');
   const [nextProductNumber, setNextProductNumber] = useState(1);
   const [nextCartId, setNextCartId] = useState(1);
   const [cartProducts, setCartProducts] = useState<CartProduct[]>([]);
@@ -93,8 +93,6 @@ export function PrintingCalculatorPage({
   );
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [pdfError, setPdfError] = useState('');
-  const [pendingDestination, setPendingDestination] =
-    useState<ConfiguratorDestination | null>(null);
   const [values, setValues] = useState<Record<NumericField, string>>({
     hours: '0',
     minutes: '0',
@@ -109,15 +107,14 @@ export function PrintingCalculatorPage({
   }, [settings]);
 
   useEffect(() => {
-    if (!isSettingsOpen && !pendingDestination) return;
+    if (!isSettingsOpen) return;
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       setIsSettingsOpen(false);
-      setPendingDestination(null);
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [isSettingsOpen, pendingDestination]);
+  }, [isSettingsOpen]);
 
   const numericValues = useMemo(
     () => ({
@@ -292,21 +289,6 @@ export function PrintingCalculatorPage({
     [cartProducts],
   );
 
-  const leaveCalculator = (destination: ConfiguratorDestination) => {
-    if (cartProducts.length > 0) {
-      setPendingDestination(destination);
-      return;
-    }
-    onNavigate(destination);
-  };
-
-  const confirmLeaveCalculator = () => {
-    if (!pendingDestination) return;
-    const destination = pendingDestination;
-    setPendingDestination(null);
-    onNavigate(destination);
-  };
-
   const downloadQuote = async () => {
     if (cartProducts.length === 0 || isGeneratingPdf) return;
     setIsGeneratingPdf(true);
@@ -344,18 +326,11 @@ export function PrintingCalculatorPage({
   ] as const;
 
   return (
-    <main className='calculator-shell' style={{ '--accent': '#2f8f83' } as React.CSSProperties}>
+    <main className='calculator-shell studio-calculator'>
       <header className='calculator-topbar'>
-        <div className='brand calculator-brand'>
-          <button
-            type='button'
-            className='brand-mark brand-mark-button'
-            aria-label='Volver al configurador'
-            onClick={() => leaveCalculator(currentConfiguratorMode)}
-          >
-            <img src={`${import.meta.env.BASE_URL}horama-mark.svg`} alt='Horama' />
-          </button>
-        </div>
+        <button type='button' className='studio-calculator-return' onClick={onReturn}>
+          <ArrowLeft size={16} aria-hidden='true' />{returnLabel}
+        </button>
         <div className='calculator-heading'>
           <span className='calculator-heading-icon' aria-hidden='true'>
             <Calculator size={22} />
@@ -676,54 +651,6 @@ export function PrintingCalculatorPage({
           </section>
         </aside>
       </div>
-
-      {pendingDestination ? (
-        <div
-          className='calculator-modal-backdrop'
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setPendingDestination(null);
-            }
-          }}
-        >
-          <section
-            className='calculator-leave-modal'
-            role='alertdialog'
-            aria-modal='true'
-            aria-labelledby='calculator-leave-title'
-            aria-describedby='calculator-leave-description'
-          >
-            <span className='calculator-leave-icon' aria-hidden='true'>
-              <AlertTriangle size={25} />
-            </span>
-            <div>
-              <p className='eyebrow'>Cotización sin guardar</p>
-              <h2 id='calculator-leave-title'>¿Salir de la calculadora?</h2>
-              <p id='calculator-leave-description'>
-                Los productos agregados y los datos de esta cotización se
-                perderán al regresar al configurador.
-              </p>
-            </div>
-            <div className='calculator-leave-actions'>
-              <button
-                type='button'
-                className='calculator-stay-button'
-                autoFocus
-                onClick={() => setPendingDestination(null)}
-              >
-                Seguir cotizando
-              </button>
-              <button
-                type='button'
-                className='calculator-leave-button'
-                onClick={confirmLeaveCalculator}
-              >
-                Salir y perder cambios
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
 
       {isSettingsOpen ? (
         <div
