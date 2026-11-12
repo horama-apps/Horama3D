@@ -45,6 +45,7 @@ const resources = {
         business_packages: { name: 'Paquetes para negocios', description: 'Genera el Kit QR o los paquetes Esencial, Presencia y Experiencia.' },
       },
       params: {
+        anchor_spacing_mm: { label: anchorTranslations.es.spacing }, anchor_depth_mm: { label: anchorTranslations.es.depth },
         anchor_diameter_mm: { label: anchorTranslations.es.diameter }, anchor_wall_mm: { label: anchorTranslations.es.wall },
         family_text: { label: 'Texto de familia' }, name_text: { label: 'Nombre' }, ornament_width_mm: { label: 'Ancho del adorno' }, frame_color: { label: 'Color del marco y adornos' }, hanging_hole_diameter_mm: { label: 'Diámetro del ojal' },
         size: { label: 'Tamaño' }, lid_text: { label: 'Texto de la tapa' },
@@ -156,6 +157,7 @@ const resources = {
         business_packages: { name: 'Business Packages', description: 'Generate the QR Kit or the Essential, Presence, and Experience packages.' },
       },
       params: {
+        anchor_spacing_mm: { label: anchorTranslations.en.spacing }, anchor_depth_mm: { label: anchorTranslations.en.depth },
         anchor_diameter_mm: { label: anchorTranslations.en.diameter }, anchor_wall_mm: { label: anchorTranslations.en.wall },
         family_text: { label: 'Family text' }, name_text: { label: 'Name' }, ornament_width_mm: { label: 'Ornament width' }, frame_color: { label: 'Frame and decoration color' }, hanging_hole_diameter_mm: { label: 'Eyelet diameter' },
         size: { label: 'Size' }, lid_text: { label: 'Lid text' }, body_color: { label: 'Body color' }, base_color: { label: 'Base color' }, lid_color: { label: 'Lid color' }, text_color: { label: 'Text color' },
@@ -216,6 +218,7 @@ const resources = {
         business_packages: { name: 'Forfaits professionnels', description: 'Générez le Kit QR ou les forfaits Essentiel, Présence et Expérience.' },
       },
       params: {
+        anchor_spacing_mm: { label: anchorTranslations.fr.spacing }, anchor_depth_mm: { label: anchorTranslations.fr.depth },
         anchor_diameter_mm: { label: anchorTranslations.fr.diameter }, anchor_wall_mm: { label: anchorTranslations.fr.wall },
         family_text: { label: 'Texte de famille' }, name_text: { label: 'Prénom' }, ornament_width_mm: { label: 'Largeur de la décoration' }, frame_color: { label: 'Couleur du cadre et des ornements' }, hanging_hole_diameter_mm: { label: 'Diamètre de l’œillet' },
         size: { label: 'Taille' }, lid_text: { label: 'Texte du couvercle' }, body_color: { label: 'Couleur du corps' }, base_color: { label: 'Couleur de la base' }, lid_color: { label: 'Couleur du couvercle' }, text_color: { label: 'Couleur du texte' },

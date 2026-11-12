@@ -15,7 +15,7 @@ import {
 } from './generation/lampGenerator';
 import { generateClickerModelLocally } from './generation/clickerGenerator';
 import { generateStrapAnchorModel } from './generation/strapAnchorGenerator';
-import { parseAnchorPorts, type AnchorPort } from './generation/strapAnchorGeometry';
+import { parseCutterPose, type CutterPose } from './generation/strapCutterGeometry';
 import { generateHeadKeychainModelLocally } from './generation/headKeychainGenerator';
 import { generateUrnModelLocally } from './generation/urnGenerator';
 import { generateSignModel } from './generation/signGenerator';
@@ -185,7 +185,8 @@ export function App() {
     display_accessories: getDefaultParams(getProduct('display_accessories')),
     business_packages: getDefaultParams(getProduct('business_packages')),
   });
-  const [anchorPlacement, setAnchorPlacement] = useState<0 | 1 | null>(null);
+  const [anchorPlacement, setAnchorPlacement] = useState(false);
+  const [anchorMode, setAnchorMode] = useState<'translate' | 'rotate'>('translate');
   const [model, setModel] = useState<GeneratedModel | null>({
     source: 'empty',
     format: 'stl',
@@ -317,6 +318,10 @@ export function App() {
           step: 0.5,
         };
       }
+      if (productType === 'strap_anchor') {
+        overrides.anchor_spacing_mm = { min: Math.ceil((Number(params.anchor_diameter_mm) + Number(params.anchor_wall_mm)) * 10) / 10, step: .1 };
+        overrides.anchor_depth_mm = { min: Number(params.anchor_spacing_mm) / 2, step: .1 };
+      }
       if (productType === 'pet_keychains') {
         overrides.keychain_hole_diameter_mm = {
           min: 3,
@@ -329,7 +334,7 @@ export function App() {
       }
       return Object.keys(overrides).length > 0 ? overrides : undefined;
     },
-    [cutHeightMax, cutHeightMin, modelBounds, params.tag_width_mm, productType, signMountingDepthMax],
+    [cutHeightMax, cutHeightMin, modelBounds, params.tag_width_mm, params.anchor_spacing_mm, params.anchor_diameter_mm, params.anchor_wall_mm, productType, signMountingDepthMax],
   );
   const scaledModelIsVerySmall =
     modelBounds !== null &&
@@ -482,6 +487,11 @@ export function App() {
         ...current[productType],
         [key]: value,
       };
+      if (productType === 'strap_anchor' && ['anchor_spacing_mm', 'anchor_diameter_mm', 'anchor_wall_mm'].includes(key)) {
+        nextProductParams.anchor_spacing_mm = Math.max(Number(nextProductParams.anchor_spacing_mm),
+          Math.ceil((Number(nextProductParams.anchor_diameter_mm) + Number(nextProductParams.anchor_wall_mm)) * 10) / 10);
+        nextProductParams.anchor_depth_mm = Math.max(Number(nextProductParams.anchor_depth_mm), Number(nextProductParams.anchor_spacing_mm) / 2);
+      }
       if (productType === 'pet_keychains' && key === 'tag_width_mm') {
         const maximumHoleDiameter = Math.max(
           3,
@@ -820,14 +830,10 @@ export function App() {
     [params, productType, signHolePositions],
   );
 
-  const handleAnchorPortChange = (index: 0 | 1, port: AnchorPort) => {
+  const handleAnchorCutterChange = (pose: CutterPose) => {
     if (isGenerating) return;
-    setParamsByType(current => {
-      const ports = parseAnchorPorts(current.strap_anchor.anchor_ports);
-      ports[index] = port;
-      return { ...current, strap_anchor: { ...current.strap_anchor, anchor_ports: JSON.stringify(ports) } };
-    });
-    setAnchorPlacement(null);
+    setParamsByType(current => ({ ...current, strap_anchor: { ...current.strap_anchor, anchor_cutter_pose: JSON.stringify(pose) } }));
+    setAnchorPlacement(false);
     setStatus(t('anchor.positioned'));
   };
 
@@ -858,7 +864,7 @@ export function App() {
     const nextMode = moduleDirectory[nextType].mode;
     if (isDemoMode && nextMode !== 'create') return;
     setStudioView('editor');
-    setAnchorPlacement(null);
+    setAnchorPlacement(false);
     if (nextType === productType) return;
     setConfiguratorMode(nextMode);
     setWorkspaceView(nextMode);
@@ -907,7 +913,7 @@ export function App() {
   };
 
   const resetParams = () => {
-    setAnchorPlacement(null);
+    setAnchorPlacement(false);
     setHasUsedViewerActions(true);
     if (productType === 'signs') setSignHolePositions({});
     if (productType === 'pet_keychains') setPetHolePosition({ u: 0.18, v: 0.72 });
@@ -940,8 +946,8 @@ export function App() {
 
   const loadStlFile = async (file: File | undefined) => {
     if (file) {
-      setAnchorPlacement(null);
-      setParamsByType(current => ({ ...current, strap_anchor: { ...current.strap_anchor, anchor_ports: '[null,null]' } }));
+      setAnchorPlacement(false);
+      setParamsByType(current => ({ ...current, strap_anchor: { ...current.strap_anchor, anchor_cutter_pose: '' } }));
     }
     if (!file) return;
     const isStl = file.name.toLowerCase().endsWith('.stl');
@@ -1245,7 +1251,7 @@ export function App() {
         >
           <button
             className='primary-action'
-            disabled={isLocked || isGenerating || (productType === 'strap_anchor' && parseAnchorPorts(params.anchor_ports).some(port => !port))}
+            disabled={isLocked || isGenerating || (productType === 'strap_anchor' && !parseCutterPose(params.anchor_cutter_pose))}
             onClick={runGenerate}
           >
             {isGenerating ? (
@@ -1253,7 +1259,7 @@ export function App() {
             ) : (
               <Wand2 size={18} />
             )}
-            <span>{t('common.generate')}</span>
+            <span>{t(productType === 'strap_anchor' ? 'anchor.apply' : 'common.generate')}</span>
           </button>
           <button
             className='tool-action'
@@ -1314,7 +1320,8 @@ export function App() {
           onHeadKeychainAttachmentMove={handleHeadKeychainAttachmentMove}
           anchorPlacement={anchorPlacement}
           anchorEditable={productType === 'strap_anchor' && model?.source === 'upload' && !isGenerating}
-          onAnchorPortChange={handleAnchorPortChange}
+          anchorMode={anchorMode}
+          onAnchorCutterChange={handleAnchorCutterChange}
         />
         <div className='stage-statusbar' aria-live='polite'>
           <span>{status}</span>
@@ -1342,16 +1349,34 @@ export function App() {
         disabled={isLocked || (productType === 'strap_anchor' && (isGenerating || isExporting))}
         setupContent={productType === 'strap_anchor' ? <div className='anchor-placement-controls'>
           <p>{t('anchor.instructions')}</p>
-          {([0, 1] as const).map(index => <button type='button' className='studio-button' key={index}
-            disabled={isLocked || isGenerating} aria-pressed={anchorPlacement === index}
-            onClick={() => { if (model?.source === 'local') restoreUploadedModel(); setAnchorPlacement(anchorPlacement === index ? null : index); }}>
-            <span className={`anchor-port-dot anchor-port-${index}`} />
-            {t('anchor.place', { number: index + 1 })}
-            {parseAnchorPorts(params.anchor_ports)[index] ? ' ✓' : ''}
-            <small className='anchor-port-coordinates'>{parseAnchorPorts(params.anchor_ports)[index]?.point.map(value => value.toFixed(1)).join(', ')}{parseAnchorPorts(params.anchor_ports)[index] ? ' mm' : ''}</small>
-          </button>)}
-          {anchorPlacement !== null && <button type='button' className='studio-button' onClick={() => setAnchorPlacement(null)}>{t('anchor.orbit')}</button>}
-          <p className='anchor-placement-hint' aria-live='polite'>{t(anchorPlacement !== null ? 'anchor.clickSurface' : 'anchor.dragHint')}</p>
+          <button type='button' className='studio-button' disabled={isLocked || isGenerating}
+            aria-pressed={anchorPlacement}
+            onClick={() => { if (model?.source === 'local') restoreUploadedModel(); setAnchorPlacement(!anchorPlacement); }}>
+            {t(anchorPlacement ? 'anchor.orbit' : 'anchor.place')}
+          </button>
+          {parseCutterPose(params.anchor_cutter_pose) && <>
+            <div className='anchor-mode-buttons'>
+              {(['translate', 'rotate'] as const).map(mode => <button type='button' key={mode} className='studio-button'
+                disabled={isLocked || isGenerating} aria-pressed={!anchorPlacement && anchorMode === mode}
+                onClick={() => { if (model?.source === 'local') restoreUploadedModel(); setAnchorPlacement(false); setAnchorMode(mode); }}>
+                {t(`anchor.${mode}`)}
+              </button>)}
+            </div>
+            <div className='anchor-pose-fields'>
+              {(['position', 'rotation'] as const).map(kind => <fieldset key={kind}><legend>{t(`anchor.${kind}`)}</legend>
+                {(['X', 'Y', 'Z'] as const).map((axis, i) => <label key={axis}>{axis}<input type='number' step={kind === 'position' ? .1 : 1}
+                  aria-label={`${t(`anchor.${kind}`)} ${axis}`} disabled={isLocked || isGenerating}
+                  value={Number(parseCutterPose(params.anchor_cutter_pose)![kind][i].toFixed(2))}
+                  onChange={event => {
+                    if (event.target.value === '' || !Number.isFinite(event.target.valueAsNumber)) return;
+                    if (model?.source === 'local') restoreUploadedModel();
+                    const pose = parseCutterPose(params.anchor_cutter_pose)!;
+                    pose[kind][i] = event.target.valueAsNumber; handleAnchorCutterChange(pose);
+                  }} /></label>)}
+              </fieldset>)}
+            </div>
+          </>}
+          <p className='anchor-placement-hint' aria-live='polite'>{t(anchorPlacement ? 'anchor.clickSurface' : 'anchor.dragHint')}</p>
         </div> : undefined}
         modelMetadata={model?.metadata}
         modelObjectBounds={modelObjectBounds}

@@ -4,10 +4,10 @@ import wasmUrl from 'manifold-3d/manifold.wasm?url';
 import * as THREE from 'three';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import type { AnchorPort } from './strapAnchorGeometry';
-import { createAnchorOutput } from './strapAnchorOutput';
+import type { StrapCutter } from './strapCutterGeometry';
+import { createCutterOutput } from './strapAnchorOutput';
 
-self.onmessage = async (event: MessageEvent<{ input: ArrayBuffer; ports: [AnchorPort, AnchorPort]; diameter: number; wall: number }>) => {
+self.onmessage = async (event: MessageEvent<{ input: ArrayBuffer; cutter: StrapCutter }>) => {
   try {
     const wasm = await Module({ locateFile: () => wasmUrl });
     wasm.setup();
@@ -23,7 +23,7 @@ self.onmessage = async (event: MessageEvent<{ input: ArrayBuffer; ports: [Anchor
     try { body = new wasm.Manifold(mesh); }
     catch { throw new Error('Este STL debe ser un sólido cerrado. Repara la malla antes de crear el túnel.'); }
     try {
-      const { output, warnings } = await createAnchorOutput(wasm, body, event.data.ports, event.data.diameter, event.data.wall);
+      const { output, warnings } = await createCutterOutput(wasm, body, event.data.cutter);
       self.postMessage({ output, warnings }, [output]);
     } finally { body.delete(); }
   } catch (error) {

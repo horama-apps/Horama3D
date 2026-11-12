@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as THREE from 'three';
-import { anchorPath, parseAnchorPorts, type AnchorPort } from '../generation/strapAnchorGeometry';
+import { createCutterPreview, cutterPoseOnSurface, cutterQuaternion, parseCutterPose, type CutterPose } from '../generation/strapCutterGeometry';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -30,9 +31,10 @@ interface Viewer3DProps {
   showCutPlane?: boolean;
   onModelBoundsChange?: (bounds: ModelBounds | null) => void;
   onModelObjectBoundsChange?: (bounds: ModelObjectBounds[]) => void;
-  anchorPlacement?: 0 | 1 | null;
+  anchorPlacement?: boolean;
+  anchorMode?: 'translate' | 'rotate';
   anchorEditable?: boolean;
-  onAnchorPortChange?: (index: 0 | 1, port: AnchorPort) => void;
+  onAnchorCutterChange?: (pose: CutterPose) => void;
   onMountingHoleMove?: (key: string, u: number, v: number) => void;
   onHeadKeychainAttachmentMove?: (
     kind: 'exterior_ring' | 'integrated_hole',
@@ -48,9 +50,10 @@ export function Viewer3D({
   showCutPlane = false,
   onModelBoundsChange,
   onModelObjectBoundsChange,
-  anchorPlacement = null,
+  anchorPlacement = false,
+  anchorMode = 'translate',
   anchorEditable = false,
-  onAnchorPortChange,
+  onAnchorCutterChange,
   onMountingHoleMove,
   onHeadKeychainAttachmentMove,
 }: Viewer3DProps) {
@@ -62,8 +65,8 @@ export function Viewer3D({
   onMountingHoleMoveRef.current = onMountingHoleMove;
   const onHeadKeychainAttachmentMoveRef = useRef(onHeadKeychainAttachmentMove);
   onHeadKeychainAttachmentMoveRef.current = onHeadKeychainAttachmentMove;
-  const anchorInteractionRef = useRef({ active: anchorPlacement, enabled: anchorEditable, onChange: onAnchorPortChange });
-  anchorInteractionRef.current = { active: anchorPlacement, enabled: anchorEditable, onChange: onAnchorPortChange };
+  const anchorInteractionRef = useRef({ active: anchorPlacement, enabled: anchorEditable, onChange: onAnchorCutterChange });
+  anchorInteractionRef.current = { active: anchorPlacement, enabled: anchorEditable, onChange: onAnchorCutterChange };
   const materialKey =
     productType === 'lamp'
       ? `${params.body_color}|${params.base_color}`
@@ -88,6 +91,7 @@ export function Viewer3D({
     controls: OrbitControls;
     modelRoot: THREE.Group;
     anchorPreviewRoot: THREE.Group;
+    anchorTransform: TransformControls;
     cutPlaneRoot: THREE.Group;
     keychainHoleRoot: THREE.Group;
     mountingHolePreviewRoot: THREE.Group;
@@ -360,55 +364,30 @@ export function Viewer3D({
       );
     };
 
-    let anchorDrag: { index: 0 | 1; pointer: number; port: AnchorPort; initial: AnchorPort; marker?: THREE.Object3D } | null = null;
-    const surfacePort = (event: PointerEvent): AnchorPort | null => {
+    const anchorTransform = new TransformControls(camera, renderer.domElement);
+    anchorTransform.setSize(.8);
+    anchorTransform.setSpace('local');
+    scene.add(anchorTransform.getHelper());
+    anchorTransform.addEventListener('dragging-changed', event => { controls.enabled = !event.value; });
+    anchorTransform.addEventListener('mouseUp', () => {
+      const euler = new THREE.Euler().setFromQuaternion(anchorPreviewRoot.quaternion, 'XYZ');
+      anchorInteractionRef.current.onChange?.({
+        position: modelRoot.worldToLocal(anchorPreviewRoot.position.clone()).toArray() as [number, number, number],
+        rotation: [euler.x, euler.y, euler.z].map(THREE.MathUtils.radToDeg) as [number, number, number],
+      });
+    });
+    const placeAnchorCutter = (event: PointerEvent) => {
+      if (!anchorInteractionRef.current.enabled || !anchorInteractionRef.current.active || event.button !== 0) return;
       updatePointer(event);
       const hit = raycaster.intersectObjects(modelRoot.children, true).find(hit => hit.object instanceof THREE.Mesh);
-      if (!hit?.face) return null;
+      if (!hit?.face) return;
+      event.preventDefault(); event.stopImmediatePropagation();
       modelRoot.updateWorldMatrix(true, true);
-      return {
-        point: modelRoot.worldToLocal(hit.point.clone()).toArray() as [number, number, number],
-        normal: hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize().toArray() as [number, number, number],
-      };
+      const point = modelRoot.worldToLocal(hit.point.clone()).toArray() as [number, number, number];
+      const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize().toArray() as [number, number, number];
+      anchorInteractionRef.current.onChange?.(cutterPoseOnSurface(point, normal));
     };
-    const startAnchorDrag = (event: PointerEvent) => {
-      if (!anchorInteractionRef.current.enabled || event.button !== 0) return;
-      updatePointer(event);
-      const marker = raycaster.intersectObjects(anchorPreviewRoot.children, true).find(hit => hit.object.userData.anchorIndex !== undefined)?.object;
-      const index = marker?.userData.anchorIndex ?? anchorInteractionRef.current.active;
-      if (index === null || index === undefined) return;
-      const port = surfacePort(event);
-      if (!port) return;
-      event.preventDefault(); event.stopImmediatePropagation();
-      anchorDrag = { index, pointer: event.pointerId, port, initial: port, marker };
-      controls.enabled = false;
-      renderer.domElement.setPointerCapture(event.pointerId);
-      renderer.domElement.style.cursor = 'grabbing';
-    };
-    const moveAnchorDrag = (event: PointerEvent) => {
-      if (!anchorInteractionRef.current.enabled) return;
-      if (!anchorDrag) {
-        if (anchorInteractionRef.current.active !== null) renderer.domElement.style.cursor = 'crosshair';
-        return;
-      }
-      event.preventDefault(); event.stopImmediatePropagation();
-      const port = surfacePort(event);
-      if (!port) return;
-      anchorDrag.port = port;
-      if (anchorDrag.marker) anchorDrag.marker.position.copy(modelRoot.localToWorld(new THREE.Vector3(...port.point)));
-    };
-    const finishAnchorDrag = (event: PointerEvent) => {
-      if (!anchorDrag || anchorDrag.pointer !== event.pointerId) return;
-      event.preventDefault(); event.stopImmediatePropagation();
-      if (event.type !== 'pointercancel') anchorInteractionRef.current.onChange?.(anchorDrag.index, anchorDrag.port);
-      else if (anchorDrag.marker) anchorDrag.marker.position.copy(modelRoot.localToWorld(new THREE.Vector3(...anchorDrag.initial.point)));
-      anchorDrag = null; controls.enabled = true; renderer.domElement.style.cursor = '';
-      if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
-    };
-    renderer.domElement.addEventListener('pointerdown', startAnchorDrag, true);
-    renderer.domElement.addEventListener('pointermove', moveAnchorDrag, true);
-    renderer.domElement.addEventListener('pointerup', finishAnchorDrag, true);
-    renderer.domElement.addEventListener('pointercancel', finishAnchorDrag, true);
+    renderer.domElement.addEventListener('pointerdown', placeAnchorCutter, true);
     renderer.domElement.addEventListener('pointerdown', onMarkerPointerDown, true);
     renderer.domElement.addEventListener('pointermove', onMarkerPointerMove, true);
     renderer.domElement.addEventListener('pointerup', finishMarkerDrag, true);
@@ -472,6 +451,7 @@ export function Viewer3D({
       controls,
       modelRoot,
       anchorPreviewRoot,
+      anchorTransform,
       cutPlaneRoot,
       keychainHoleRoot,
       mountingHolePreviewRoot,
@@ -484,10 +464,8 @@ export function Viewer3D({
         window.removeEventListener('resize', onResize);
         appearance.removeEventListener('change', updateAppearance);
         appearance.removeEventListener('change', updateGridAppearance);
-        renderer.domElement.removeEventListener('pointerdown', startAnchorDrag, true);
-        renderer.domElement.removeEventListener('pointermove', moveAnchorDrag, true);
-        renderer.domElement.removeEventListener('pointerup', finishAnchorDrag, true);
-        renderer.domElement.removeEventListener('pointercancel', finishAnchorDrag, true);
+        renderer.domElement.removeEventListener('pointerdown', placeAnchorCutter, true);
+        anchorTransform.detach(); anchorTransform.dispose();
         clearGroup(anchorPreviewRoot);
         renderer.domElement.removeEventListener('pointerdown', onMarkerPointerDown, true);
         renderer.domElement.removeEventListener('pointermove', onMarkerPointerMove, true);
@@ -861,30 +839,23 @@ export function Viewer3D({
   useEffect(() => {
     const context = sceneRef.current;
     if (!context) return;
+    context.anchorTransform.detach();
     clearGroup(context.anchorPreviewRoot);
-    if (!anchorEditable) return;
-    const ports = parseAnchorPorts(params.anchor_ports);
-    const diameter = Number(params.anchor_diameter_mm) || 2.5;
+    const pose = parseCutterPose(params.anchor_cutter_pose);
+    if (!anchorEditable || !pose) return;
+    const cutter = { pose, diameter: Number(params.anchor_diameter_mm), spacing: Number(params.anchor_spacing_mm),
+      depth: Number(params.anchor_depth_mm), wall: Number(params.anchor_wall_mm) };
+    context.anchorPreviewRoot.add(createCutterPreview(cutter));
     context.modelRoot.updateWorldMatrix(true, true);
-    ports.forEach((port, index) => {
-      if (!port) return;
-      const marker = new THREE.Mesh(new THREE.SphereGeometry(Math.max(1.2, diameter * 0.55), 20, 12),
-        new THREE.MeshBasicMaterial({ color: index === 0 ? 0x38bdf8 : 0xfb923c, depthTest: false, transparent: true, opacity: .9 }));
-      marker.position.copy(context.modelRoot.localToWorld(new THREE.Vector3(...port.point)));
-      marker.userData.anchorIndex = index;
-      marker.renderOrder = 30;
-      context.anchorPreviewRoot.add(marker);
-    });
-    if (ports[0] && ports[1]) {
-      const path = anchorPath([ports[0], ports[1]], diameter, Number(params.anchor_wall_mm) || 1.2).slice(1, -1)
-        .map(point => context.modelRoot.localToWorld(point));
-      const curve = new THREE.CatmullRomCurve3(path);
-      const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, diameter / 2, 8, false),
-        new THREE.MeshBasicMaterial({ color: 0x38bdf8, depthTest: false, transparent: true, opacity: .4 }));
-      tube.renderOrder = 29;
-      context.anchorPreviewRoot.add(tube);
-    }
-  }, [anchorEditable, liveBounds, model, params.anchor_ports, params.anchor_diameter_mm, params.anchor_wall_mm]);
+    context.anchorPreviewRoot.position.copy(context.modelRoot.localToWorld(new THREE.Vector3(...pose.position)));
+    context.anchorPreviewRoot.quaternion.copy(cutterQuaternion(pose));
+    context.anchorPreviewRoot.updateMatrixWorld(true);
+    context.anchorTransform.attach(context.anchorPreviewRoot);
+    context.anchorTransform.setMode(anchorMode);
+    context.anchorTransform.enabled = !anchorPlacement;
+    context.anchorTransform.getHelper().visible = !anchorPlacement;
+  }, [anchorEditable, anchorMode, anchorPlacement, liveBounds, model, params.anchor_cutter_pose, params.anchor_spacing_mm,
+    params.anchor_depth_mm, params.anchor_diameter_mm, params.anchor_wall_mm]);
 
   const canInspectMountingSide =
     productType === 'signs' &&

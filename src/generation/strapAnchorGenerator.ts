@@ -1,9 +1,9 @@
 import type { GeneratedModel, ProductParams } from '../types';
-import { parseAnchorPorts } from './strapAnchorGeometry';
+import { parseCutterPose } from './strapCutterGeometry';
 
 export async function generateStrapAnchorModel(file: File, params: ProductParams): Promise<GeneratedModel> {
-  const ports = parseAnchorPorts(params.anchor_ports);
-  if (!ports[0] || !ports[1]) throw new Error('Marca las dos entradas del túnel sobre el modelo antes de generar.');
+  const pose = parseCutterPose(params.anchor_cutter_pose);
+  if (!pose) throw new Error('Coloca el cortador sobre el STL antes de aplicar el corte.');
   const input = await file.arrayBuffer();
   const worker = new Worker(new URL('./strapAnchor.worker.ts', import.meta.url), { type: 'module' });
   try {
@@ -16,7 +16,7 @@ export async function generateStrapAnchorModel(file: File, params: ProductParams
         else reject(new Error('La herramienta no devolvió un STL válido.'));
       };
       worker.onerror = (event) => { window.clearTimeout(timer); reject(new Error(event.message || 'No se pudo procesar el STL.')); };
-      worker.postMessage({ input, ports, diameter: Number(params.anchor_diameter_mm), wall: Number(params.anchor_wall_mm) }, [input]);
+      worker.postMessage({ input, cutter: { pose, diameter: Number(params.anchor_diameter_mm), wall: Number(params.anchor_wall_mm), spacing: Number(params.anchor_spacing_mm), depth: Number(params.anchor_depth_mm) } }, [input]);
     });
     const blob = new Blob([output], { type: 'model/stl' });
     const url = URL.createObjectURL(blob);

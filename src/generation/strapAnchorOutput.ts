@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 import { analyzeStlLocally } from './stlValidation.ts';
 import { cutIntegratedAnchor, type AnchorPort } from './strapAnchorGeometry.ts';
+import { cutWithStrapCutter, type StrapCutter } from './strapCutterGeometry.ts';
 
 function serialize(body: Manifold): ArrayBuffer {
   const mesh = body.getMesh();
@@ -22,11 +23,19 @@ function serialize(body: Manifold): ArrayBuffer {
 /** Retry from the source: simplifying only the cut cannot resolve source slivers. */
 export async function createAnchorOutput(wasm: ManifoldToplevel, source: Manifold,
   ports: [AnchorPort, AnchorPort], diameter: number, wall: number) {
+  return createValidatedOutput(source, body => cutIntegratedAnchor(wasm, body, ports, diameter, wall));
+}
+
+export async function createCutterOutput(wasm: ManifoldToplevel, source: Manifold, cutter: StrapCutter) {
+  return createValidatedOutput(source, body => cutWithStrapCutter(wasm, body, cutter));
+}
+
+async function createValidatedOutput(source: Manifold, cut: (body: Manifold) => Manifold) {
   for (const tolerance of [0, 0.005]) {
     const body = tolerance ? source.simplify(tolerance) : source;
     try {
-      // Repeat all surface, wall and detached-part checks after source cleanup.
-      const result = cutIntegratedAnchor(wasm, body, ports, diameter, wall);
+      // Repeat all geometric checks after source cleanup.
+      const result = cut(body);
       let output: ArrayBuffer;
       try { output = serialize(result); } finally { result.delete(); }
       const validation = await analyzeStlLocally(new File([output], 'tunel.stl', { type: 'model/stl' }));
@@ -36,5 +45,5 @@ export async function createAnchorOutput(wasm: ManifoldToplevel, source: Manifol
       }
     } finally { if (body !== source) body.delete(); }
   }
-  throw new Error('No se pudo obtener un STL cerrado. Repara la malla original o prueba otra ubicación para las entradas.');
+  throw new Error('No se pudo obtener un STL cerrado. Repara la malla original o prueba otra ubicación del cortador.');
 }

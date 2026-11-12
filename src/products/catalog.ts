@@ -62,7 +62,9 @@ export const products: ProductDefinition[] = [
     description: 'Crea un paso integrado de dos entradas para hilos o argollas dentro de un STL.',
     accent: '#327b6c',
     params: [
-      { kind: 'text', key: 'anchor_ports', label: 'Entradas', defaultValue: '[null,null]' },
+      { kind: 'text', key: 'anchor_cutter_pose', label: 'Posición del cortador', defaultValue: '' },
+      { kind: 'number', key: 'anchor_spacing_mm', label: 'Separación de los pasos', unit: 'mm', min: 3, max: 30, step: .1, defaultValue: 6 },
+      { kind: 'number', key: 'anchor_depth_mm', label: 'Profundidad del túnel', unit: 'mm', min: 1.5, max: 30, step: .1, defaultValue: 5 },
       { kind: 'number', key: 'anchor_diameter_mm', label: 'Diámetro del paso', unit: 'mm', min: 1.5, max: 8, step: 0.1, defaultValue: 2.5 },
       { kind: 'number', key: 'anchor_wall_mm', label: 'Pared mínima alrededor', unit: 'mm', min: 1, max: 6, step: 0.1, defaultValue: 1.2 },
       { kind: 'color', key: 'body_color', label: 'Color del objeto', defaultValue: '#d9ae78' },
