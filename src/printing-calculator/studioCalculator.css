@@ -3,8 +3,6 @@
 .studio-calculator-host[hidden] { display: none; }
 .studio-calculator.calculator-shell { --accent: var(--studio-accent); min-height: 0; height: auto; overflow: visible; padding: 28px clamp(18px,4vw,52px) 40px; color: var(--studio-ink); background: var(--studio-ground); }
 .studio-calculator .calculator-topbar { display: flex; flex-direction: column; align-items: stretch; gap: 24px; margin-bottom: 28px; width: min(1180px,100%); }
-.studio-calculator-return { display: inline-flex; align-items: center; align-self: flex-start; gap: 8px; border: 0; background: none; color: var(--studio-muted); padding: 2px 0; font-size: 12px; cursor: pointer; }
-.studio-calculator-return:hover { color: var(--studio-accent); }
 .studio-calculator .calculator-heading { grid-template-columns: 44px minmax(0,1fr) auto; gap: 16px; }
 .studio-calculator .calculator-heading-icon { width: 44px; height: 44px; color: var(--studio-accent); background: color-mix(in srgb,var(--studio-accent) 12%,var(--studio-panel)); border-radius: 12px; box-shadow: none; }
 .studio-calculator .calculator-heading h1 { color: var(--studio-ink); margin: 5px 0 7px; font-size: clamp(24px,2.6vw,33px); font-weight: 600; letter-spacing: -.8px; line-height: 1.2; }

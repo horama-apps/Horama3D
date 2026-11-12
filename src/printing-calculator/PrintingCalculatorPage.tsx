@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowLeft,
   Calculator,
   CircleDollarSign,
   Clock3,
@@ -45,8 +44,6 @@ type NumericField =
   | 'additionalCosts';
 
 interface PrintingCalculatorPageProps {
-  onReturn: () => void;
-  returnLabel: string;
   initialProductName?: string;
 }
 
@@ -74,8 +71,6 @@ function getLocalDateValue(): string {
 }
 
 export function PrintingCalculatorPage({
-  onReturn,
-  returnLabel,
   initialProductName,
 }: PrintingCalculatorPageProps) {
   const [settings, setSettings] = useState<PrintingCalculatorSettings>(
@@ -328,9 +323,6 @@ export function PrintingCalculatorPage({
   return (
     <main className='calculator-shell studio-calculator'>
       <header className='calculator-topbar'>
-        <button type='button' className='studio-calculator-return' onClick={onReturn}>
-          <ArrowLeft size={16} aria-hidden='true' />{returnLabel}
-        </button>
         <div className='calculator-heading'>
           <span className='calculator-heading-icon' aria-hidden='true'>
             <Calculator size={22} />

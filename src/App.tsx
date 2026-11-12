@@ -155,7 +155,6 @@ export function App() {
   );
   const [studioView, setStudioView] = useState<'catalog' | 'editor'>(isDemoMode ? 'editor' : 'catalog');
   const [calculatorOpened, setCalculatorOpened] = useState(false);
-  const [returnView, setReturnView] = useState<'catalog' | 'editor'>('catalog');
   const product = useMemo(() => getProduct(productType), [productType]);
   const [paramsByType, setParamsByType] = useState<
     Record<ProductType, ProductParams>
@@ -882,7 +881,6 @@ export function App() {
 
   const openCalculator = () => {
     if (workspaceView === 'calculator') return;
-    setReturnView(studioView);
     setCalculatorOpened(true);
     setWorkspaceView('calculator');
   };
@@ -1132,7 +1130,7 @@ export function App() {
             />
 
       {calculatorOpened && <div className='studio-calculator-host' hidden={workspaceView !== 'calculator'}>
-        <PrintingCalculatorPage onReturn={() => showStudio(returnView)} returnLabel={t(returnView === 'editor' ? 'studio.returnEditor' : 'studio.returnModules')} initialProductName={returnView === 'editor' ? t(`products.${productType}.name`, { defaultValue: product.name }) : undefined} />
+        <PrintingCalculatorPage initialProductName={studioView === 'editor' ? t(`products.${productType}.name`, { defaultValue: product.name }) : undefined} />
       </div>}
       {workspaceView === 'calculator' ? null : studioView === 'catalog' ? <StudioCatalog active={productType} demo={isDemoMode} disabled={isGenerating || isAnalyzing || isExporting}
         onOpen={selectProduct} onResume={() => setStudioView('editor')} /> : <main
