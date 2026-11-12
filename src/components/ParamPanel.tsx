@@ -28,6 +28,7 @@ interface ParamPanelProps {
   showMaterialControls?: boolean;
   shouldCollapseSetup?: boolean;
   headerAction?: ReactNode;
+  setupContent?: ReactNode;
   onChange: (key: string, value: ProductParams[string]) => void;
 }
 
@@ -42,6 +43,7 @@ export function ParamPanel({
   showMaterialControls = false,
   shouldCollapseSetup = false,
   headerAction,
+  setupContent,
   onChange,
 }: ParamPanelProps) {
   const { t } = useTranslation();
@@ -126,6 +128,7 @@ export function ParamPanel({
       !postProcessingParams.some((postParam) => postParam.key === param.key),
   );
   const visibleMainParams = mainParams.filter((param) => {
+    if (product.type === 'strap_anchor' && param.key === 'anchor_ports') return false;
     if (product.type === 'qr_sign' && param.key === 'qr_base_text' && params.mount_style !== 'tabletop') return false;
     if (
       (product.type === 'wifi_sign' || product.type === 'business_packages') &&
@@ -245,6 +248,7 @@ export function ParamPanel({
         )}
       </div>
 
+      {setupContent}
       <section className="main-param-section" aria-label={`${productName} — ${t('common.setup')}`}>
         <CollapsibleHeading
           label={t('common.setup')}

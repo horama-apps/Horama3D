@@ -58,6 +58,17 @@ const publicAsset = (path: string) =>
 
 export const products: ProductDefinition[] = [
   {
+    type: 'strap_anchor', name: 'Túnel para correa',
+    description: 'Crea un paso integrado de dos entradas para hilos o argollas dentro de un STL.',
+    accent: '#327b6c',
+    params: [
+      { kind: 'text', key: 'anchor_ports', label: 'Entradas', defaultValue: '[null,null]' },
+      { kind: 'number', key: 'anchor_diameter_mm', label: 'Diámetro del paso', unit: 'mm', min: 1.5, max: 8, step: 0.1, defaultValue: 2.5 },
+      { kind: 'number', key: 'anchor_wall_mm', label: 'Pared mínima alrededor', unit: 'mm', min: 1, max: 6, step: 0.1, defaultValue: 1.2 },
+      { kind: 'color', key: 'body_color', label: 'Color del objeto', defaultValue: '#d9ae78' },
+    ],
+  },
+  {
     type: 'christmas_tree_ornament',
     name: 'Adorno de árbol navideño',
     description: 'Árbol personalizado multicolor con marco, adornos y ojal para colgar.',

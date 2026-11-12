@@ -1,0 +1,8 @@
+{
+  "tool": "built-in image_gen",
+  "master": "v1/strap-anchor.png",
+  "thumbnail": "../../public/module-thumbnails/strap-anchor.webp",
+  "geometryReference": "references/strap-anchor.png",
+  "styleReference": "v1/qr-sign.png",
+  "prompt": "Use case: product-mockup. Generate one square product photograph for the Horama3D 'Túnel para correa' module. Reference image 1 is the ACTUAL GEOMETRY, preserve exactly the rounded forest-green rectangular block with TWO small circular openings on the two adjacent vertical side faces near one rounded corner, connected by a hidden curved tunnel INSIDE the solid body. There is NO protruding eyelet, NO ear, NO external loop, NO hole drilled through the top face, NO extra third opening. Keep the block about 40 x 40 x 12 mm and holes about 2.5 mm in diameter as shown. Reference image 2 is STYLE ONLY: same seamless warm pale stone tabletop/background, soft large upper-left window light, gentle contact shadow, matte FDM PLA with fine print-layer texture, premium editorial product photography. Show the complete single block close up from the same three-quarter elevated front-corner angle as reference 1 so both side openings are clearly visible. Match the muted forest-green material from geometry reference. Do not add a cord or metal ring, no hands or props, no labels, no lettering, no watermark, no UI, no diagram or cutaway. Make the internal integrated lanyard passage recognizable through the two adjacent side openings, with generous crop-safe margins and the full object inside frame."
+}

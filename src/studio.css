@@ -198,3 +198,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .studio-stage-actions { display: flex; flex-wrap: wrap; gap: 7px; }
 .studio-stage-actions .studio-mobile-upload { display: none; }
 @media (max-width: 900px) { .studio-stage-actions .studio-mobile-upload { display: inline-flex; } }
+.anchor-placement-controls { display: grid; gap: 10px; padding: 0 0 22px; margin-bottom: 22px; border-bottom: 1px solid var(--studio-line); }
+.anchor-placement-controls p { margin: 0; font-size: 12px; line-height: 1.6; color: var(--studio-muted); }
+.anchor-placement-controls .studio-button { justify-content: flex-start; }
+.anchor-placement-controls .studio-button[aria-pressed='true'] { border-color: var(--studio-accent); color: var(--studio-accent); background: var(--studio-ground); }
+.anchor-port-dot { width: 10px; height: 10px; border-radius: 50%; background: #38bdf8; }
+.anchor-port-1 { background: #fb923c; }
+.anchor-placement-controls .anchor-placement-hint { font-size: 11px; }
+.anchor-port-coordinates { margin-left: auto; font-size: 10px; color: var(--studio-muted); }

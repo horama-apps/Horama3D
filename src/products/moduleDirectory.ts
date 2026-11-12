@@ -31,6 +31,7 @@ export const moduleDirectory: Record<ProductType, ModulePresentation> = {
   image_layers: { category: 'images', mode: 'image', icon: 'layers', thumbnail: 'image-layers.webp' },
   clicker: { category: 'tools', mode: 'stl', icon: 'click', thumbnail: 'clickers.webp' },
   head_keychains: { category: 'tools', mode: 'stl', icon: 'face', thumbnail: 'head-keychains.webp' },
+  strap_anchor: { category: 'tools', mode: 'stl', icon: 'anchor', thumbnail: 'strap-anchor.webp' },
   textures: { category: 'tools', mode: 'stl', icon: 'grid', thumbnail: 'textures.webp' },
 };
 

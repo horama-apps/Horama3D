@@ -1,15 +1,15 @@
 # Horama3D · Product thumbnail direction
 
-Complete 20-module catalog collection. The initial QR Signs, Paycards and Christmas ornament studies establish the photographic family.
+Complete 21-module catalog collection. The initial QR Signs, Paycards and Christmas ornament studies establish the photographic family.
 Generated using the built-in image generation tool. The first three use local geometry references; the remaining 17 use the approved QR image as a style reference and subject briefs based on the module definitions. These are catalog illustrations, not printable models or output previews.
 
 ## Files
 
-- `v1/*.png`: 20 full-resolution generated masters.
+- `v1/*.png`: 21 full-resolution generated masters.
 - `references/`: geometry reference views for the original three studies.
 - `../../public/module-thumbnails/`: 768 × 768 WebP derivatives, quality 84, prepared for the future catalog.
 
-The Estudio module catalog uses all 20 WebP derivatives. Icons remain available as a fallback for future modules.
+The Estudio module catalog uses all 21 WebP derivatives. Icons remain available as a fallback for future modules.
 
 ## Shared prompt direction
 
@@ -32,6 +32,10 @@ Preserve the flat three-tier Christmas-tree silhouette, short trunk, integral ha
 ## Remaining 17 prompts
 
 The complete production prompts and file mapping are in [prompts-remaining-v1.json](prompts-remaining-v1.json). The style reference is the approved `v1/qr-sign.png`; the generation tool is built-in `image_gen`. These images illustrate representative printable products rather than promising an exact model or a scannable QR.
+
+## Lanyard tunnel module
+
+The integrated tunnel thumbnail uses a rendered result of the real cutter as its geometry reference. See [strap-anchor-prompt.json](strap-anchor-prompt.json) for the prompt and file mapping.
 
 ## Presentation
 

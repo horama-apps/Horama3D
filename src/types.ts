@@ -3,6 +3,7 @@ export type ProductType =
   | 'urn'
   | 'clicker'
   | 'head_keychains'
+  | 'strap_anchor'
   | 'textures'
   | 'keychains'
   | 'image_layers'

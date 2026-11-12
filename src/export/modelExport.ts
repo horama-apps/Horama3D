@@ -963,7 +963,9 @@ function getExportMaterial(
     };
   }
   const color =
-    productType === 'clicker'
+    productType === 'strap_anchor'
+      ? getColorParam(params.body_color, '#d9ae78')
+      : productType === 'clicker'
       ? normalizedRole === 'lid'
         ? getColorParam(params.top_color, DEFAULT_COLOR)
         : normalizedRole === 'body'
