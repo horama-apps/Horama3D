@@ -12,7 +12,7 @@ The `strap_anchor` module is an STL tool. It removes a continuous rounded channe
 
 ## Geometry
 
-A cubic Bézier path starts and ends normal to the chosen surfaces. Rounded capsule segments form the subtractive tool. This library is independent of the UI and reusable by other modules. Cutting, validation and STL export run in a dedicated Manifold Web Worker. Sub-0.0001 mm Boolean slivers are simplified before float32 serialization; the serialized STL is checked again for watertightness before being returned.
+A cubic Bézier path starts and ends normal to the chosen surfaces. Rounded capsule segments form the subtractive tool. This library is independent of the UI and reusable by other modules. Cutting, validation and STL export run in a dedicated Manifold Web Worker. Sub-0.0001 mm Boolean slivers are simplified before float32 serialization; the serialized STL is checked again for watertightness before being returned. If that round trip is not closed, the tool retries from the original solid with a bounded 0.005 mm simplification, then repeats all geometry checks and validates the serialized STL again. This resolves near-degenerate source surfaces and float32 export slivers without accepting an open result. Cleanup is reported to the user; the uploaded file is never overwritten.
 
 The original coordinate system is retained. Both endpoints must match exterior surfaces. Openings too close together, a path outside the local object, insufficient material around nine sampled interior stations, an empty result and newly detached components are rejected. Nine interior stations use full spherical material envelopes, not just a check of the centerline.
 
@@ -24,6 +24,6 @@ Unit tests cover a continuous two-entry corner tunnel, closed connected output, 
 
 A binary STL round-trip test checks closed output for both exact and ray-picked floating-point endpoint coordinates.
 
-Browser checks exercise real surface clicks, dragging, regeneration, original-mesh restoration, STL/3MF downloads and mobile layout.
+Browser checks exercise real surface clicks, dragging, regeneration, original-mesh restoration, STL/3MF downloads and mobile layout. A real 351,614-triangle bottle STL with source slivers reproduced an export rejection; the recovery path produces a closed STL with two 2.5 mm openings on its cap, retaining a 1.2 mm sampled wall minimum. The customer file is not checked into the repository.
 
 The catalog image was generated with the built-in image tool from a rendered result of this actual cutter. Its full prompt is saved in `assets/module-thumbnails/strap-anchor-prompt.json`.
